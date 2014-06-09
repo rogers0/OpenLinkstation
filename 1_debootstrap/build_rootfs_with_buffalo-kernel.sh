@@ -14,6 +14,8 @@
 ROOTPW=password
 DISTRO=squeeze
 NEWHOST=LS-Squeeze
+#DISTRO=wheezy
+#NEWHOST=LS-Wheezy
 
 MIRROR=http://ftp.jp.debian.org/debian
 TARGET=/mnt/disk1/rootfs
@@ -126,7 +128,6 @@ echo $NEWHOST > $TARGET/etc/hostname
 echo en_US.UTF-8 UTF-8 > $TARGET/etc/locale.gen
 echo LANG=en_US.UTF-8 > $TARGET/etc/default/locale
 cp -a /etc/localtime $TARGET/etc/
-echo -e "0.0 0 0.0\n0\nLOCAL" > $TARGET/etc/adjtime
 cp -a /etc/ssh_host_{dsa,rsa}* $TARGET/etc/ssh/
 chmod 400 $TARGET/etc/ssh/ssh_host_{dsa,rsa}_key
 chmod 444 $TARGET/etc/ssh/ssh_host_{dsa,rsa}_key.pub
@@ -182,6 +183,11 @@ sed -i 's/^4:23:respawn:/#4:23:respawn:/' /etc/inittab
 sed -i 's/^5:23:respawn:/#5:23:respawn:/' /etc/inittab
 sed -i 's/^6:23:respawn:/#6:23:respawn:/' /etc/inittab
 echo "T0:23:respawn:/sbin/getty -L ttyS0 115200 vt100" >> /etc/inittab
+if [ $DISTRO = "squeeze" ]; then
+sed -i 's/^UTC=yes/UTC=no/' /etc/default/rcS
+elif [ $DISTRO = "wheezy" ]; then
+echo -e "0.0 0 0.0\n0\nLOCAL" > /etc/adjtime
+fi
 depmod -a `uname -r`
 apt-get update
 apt-get dist-upgrade -y
