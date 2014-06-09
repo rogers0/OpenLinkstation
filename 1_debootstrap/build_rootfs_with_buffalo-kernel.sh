@@ -12,13 +12,10 @@
 #	http://buffalo.nas-central.org/wiki/Initrd_for_Raid-Boot
 
 ROOTPW=password
-#DISTRO=squeeze
-#NEWHOST=LS-Squeeze
-DISTRO=wheezy
-NEWHOST=LS-Wheezy
+DISTRO=squeeze
+NEWHOST=LS-Squeeze
 
-#MIRROR=http://ftp.jp.debian.org/debian
-MIRROR=http://ftp.jaist.ac.jp/debian
+MIRROR=http://ftp.jp.debian.org/debian
 TARGET=/mnt/disk1/rootfs
 TARGET_DEV=/dev/sda6
 BOOT_DEV=/dev/sda1
