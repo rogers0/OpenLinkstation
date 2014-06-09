@@ -125,6 +125,8 @@ mkdir -p $TARGET/etc/default/ $TARGET/etc/apt/ $TARGET/etc/ssh/ $TARGET/lib/modu
 echo $NEWHOST > $TARGET/etc/hostname
 echo en_US.UTF-8 UTF-8 > $TARGET/etc/locale.gen
 echo LANG=en_US.UTF-8 > $TARGET/etc/default/locale
+cp -a /etc/localtime $TARGET/etc/
+echo -e "0.0 0 0.0\n0\nLOCAL" > $TARGET/etc/adjtime
 cp -a /etc/ssh_host_{dsa,rsa}* $TARGET/etc/ssh/
 chmod 400 $TARGET/etc/ssh/ssh_host_{dsa,rsa}_key
 chmod 444 $TARGET/etc/ssh/ssh_host_{dsa,rsa}_key.pub
