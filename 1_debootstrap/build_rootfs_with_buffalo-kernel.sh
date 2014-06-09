@@ -12,10 +12,13 @@
 #	http://buffalo.nas-central.org/wiki/Initrd_for_Raid-Boot
 
 ROOTPW=password
-DISTRO=squeeze
-NEWHOST=LS-Squeeze
+#DISTRO=squeeze
+#NEWHOST=LS-Squeeze
+DISTRO=wheezy
+NEWHOST=LS-Wheezy
 
-MIRROR=http://ftp.jp.debian.org/debian
+#MIRROR=http://ftp.jp.debian.org/debian
+MIRROR=http://ftp.jaist.ac.jp/debian
 TARGET=/mnt/disk1/rootfs
 TARGET_DEV=/dev/sda6
 BOOT_DEV=/dev/sda1
@@ -70,11 +73,11 @@ mke2fs -F -m 0 -b 1024 initrd
 tune2fs -c0 -i0 initrd
 mkdir INITRD
 mount -o loop initrd INITRD
-mkdir -p INITRD/{bin,lib,sbin}
+mkdir -p INITRD/{bin,lib,sbin,proc}
 cp -aL /bin/busybox INITRD/bin/
 cp -aL /sbin/pivot_root INITRD/sbin/
 if [ $ARRAY -eq 1 ]; then
-mkdir -p INITRD/{dev,proc,etc/mdadm}
+mkdir -p INITRD/{dev,etc/mdadm}
 (cd INITRD/dev/; MAKEDEV sd{a,b,c,d} md)
 cp -aL /sbin/mdadm INITRD/sbin/
 fi
@@ -85,7 +88,9 @@ cp -aL $libs2install INITRD/lib/
 if [ $ARRAY -eq 0 ]; then
 cat << EOT > INITRD/linuxrc
 #!/bin/sh
+mount -t proc none /proc
 echo $INITRD_ROOT_DEV > /proc/sys/kernel/real-root-dev
+umount /proc
 EOT
 elif [ $ARRAY -eq 1 ]; then
 cat << EOT > INITRD/linuxrc
@@ -139,7 +144,7 @@ deb $MIRROR squeeze main contrib non-free
 deb http://security.debian.org squeeze/updates main contrib non-free
 EOT
 CreateFstab xfs ext3
-cat << EOT >> $TARGET/etc/network/interfaces
+cat << EOT > $TARGET/etc/network/interfaces
 auto lo
 iface lo inet loopback
 auto eth0
@@ -165,7 +170,7 @@ elif [ "$1" = "chrooted" ]; then
 echo 2nd stage: CHROOT: build initrd image to boot from temp device
 
 mount -t proc proc /proc
-(cd /dev/; mv .udev .oldudev; MAKEDEV sd{a,b,c,d} md; mv .oldudev .udev)
+(cd /dev/; [ -d .udev ] && mv .udev .oldudev; MAKEDEV sd{a,b,c,d} md; [ -d .oldudev ] && mv .oldudev .udev)
 mount -t sysfs sysfs /sys
 mount -t devpts devpts /dev/pts
 mount $BOOT_DEV /boot
@@ -198,8 +203,8 @@ echo 3rd stage: Build Debian rootfs on final target device
 TARGET=/mnt
 TARGET_DEV=/dev/sda2
 MNT_DEV=/dev/sda6
-INITRD_ROOT_DEV=0x801
-if [ -d /mnt/array1/ -a -z "$2" ] || [ "x$2" = "x1" ]; then
+INITRD_ROOT_DEV=0x802
+if [ $ARRAY -eq 1 ]; then
 TARGET_DEV=/dev/md1
 MNT_DEV=/dev/md2
 INITRD_ROOT_DEV=0x901	# 0x806:sda6; 0x822:sdb6; 0x901:md1; 0x902:md2;
@@ -207,9 +212,8 @@ fi
 
 echo ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV INITRD_ROOT_DEVICE=$INITRD_ROOT_DEV
 
-mount -t ext3 $TARGET_DEV $TARGET
 (cd $TARGET
-if [ -d stock_rootfs_backup ]; then
+if [ ! -d stock_rootfs_backup ]; then
 	echo mkdir stock_rootfs_backup
 	mkdir stock_rootfs_backup
 	echo mv .\* \* stock_rootfs_backup/
@@ -221,7 +225,8 @@ tar xf /rootfs.tar)
 CreateFstab ext3 xfs
 mount -o remount,rw /boot
 initrd_bak=initrd.buffalo_debian_tmp-`basename $MNT_DEV`
-(cd /boot; [ -f initrd.buffalo_debian -a ! -f $initrd_bak ] && mv initrd.buffalo_debian $initrd_bak)
+(cd /boot; [ -f $initrd_bak ] && rm $initrd_bak;
+[ -f initrd.buffalo_debian ] && mv initrd.buffalo_debian $initrd_bak)
 CreateInitrd
 mount -o remount,ro /boot
 
