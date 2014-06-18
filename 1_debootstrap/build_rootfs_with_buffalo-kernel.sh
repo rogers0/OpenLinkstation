@@ -24,17 +24,21 @@ BOOT_DEV=/dev/sda1
 MNT_DEV=/dev/sda2
 SWAP_DEV=/dev/sda5
 INITRD_ROOT_DEV=0x806
-
 ARRAY=0	# condition intended to be so complex due to fit various cases: 1st run / 2nd run in chroot w/ or w/o RAID
 [ "x$2" != "x0" -a "x$2" = "x1" ] && ARRAY=1
 [ $ARRAY -eq 0 ] && [ -f /proc/mdstat ] && [ `wc -l /proc/mdstat | awk '{print $1}'` -gt 2 ] && ARRAY=1
 if [ $ARRAY -eq 1 ]; then
-TARGET=/mnt/array1/rootfs
+[ ! -d /mnt/disk1 ] && TARGET=/mnt/array1/rootfs
+if [ -e /dev/md21 ]; then
+TARGET_DEV=/dev/md21
+INITRD_ROOT_DEV=0x915
+else
 TARGET_DEV=/dev/md2
+INITRD_ROOT_DEV=0x902	# 0x806:sda6; 0x822:sdb6; 0x901:md1; 0x902:md2; 0x915:md21
+fi
 BOOT_DEV=/dev/md0
 MNT_DEV=/dev/md1
 SWAP_DEV=/dev/md10
-INITRD_ROOT_DEV=0x902	# 0x806:sda6; 0x822:sdb6; 0x901:md1; 0x902:md2;
 fi
 
 # package detail can be found on: https://packages.debian.org/squeeze/all/debootstrap/download
@@ -155,7 +159,9 @@ EOT
 
 cp `basename $0` $TARGET
 echo Chroot datetime: `date`
+mount --bind /dev $TARGET/dev
 LANG=C chroot $TARGET /`basename $0` chrooted $ARRAY
+umount $TARGET/dev
 cd $TARGET
 echo tar cf ../rootfs.tar .
 tar cf ../rootfs.tar .
@@ -211,11 +217,28 @@ MNT_DEV=/dev/sda6
 INITRD_ROOT_DEV=0x802
 if [ $ARRAY -eq 1 ]; then
 TARGET_DEV=/dev/md1
+if [ -e /dev/md21 ]; then
+MNT_DEV=/dev/md21
+else
 MNT_DEV=/dev/md2
-INITRD_ROOT_DEV=0x901	# 0x806:sda6; 0x822:sdb6; 0x901:md1; 0x902:md2;
+fi
+INITRD_ROOT_DEV=0x901	# 0x806:sda6; 0x822:sdb6; 0x901:md1; 0x902:md2; 0x915:md21
 fi
 
 echo ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV INITRD_ROOT_DEVICE=$INITRD_ROOT_DEV
+
+if [ -f /rootfs.tar ]; then
+	ARG=xf;  TAR=/rootfs.tar
+elif [ -f /rootfs.tar.gz ]; then
+	ARG=xfz; TAR=/rootfs.tar.gz
+elif [ -f /rootfs.tar.bz2 ]; then
+	ARG=xfj; TAR=/rootfs.tar.bz2
+elif [ -f /rootfs.tar.xz ]; then
+	ARG=xfJ; TAR=/rootfs.tar.xz
+else
+	echo cannot find rootfs tarball.
+	exit
+fi
 
 (cd $TARGET
 if [ ! -d stock_rootfs_backup ]; then
@@ -224,8 +247,8 @@ if [ ! -d stock_rootfs_backup ]; then
 	echo mv .\* \* stock_rootfs_backup/
 	mv .* * stock_rootfs_backup/
 fi
-echo tar xf /rootfs.tar
-tar xf /rootfs.tar)
+echo tar $ARG $TAR
+tar $ARG $TAR)
 
 CreateFstab ext3 xfs
 mount -o remount,rw /boot

@@ -33,6 +33,18 @@ After a few minutes on booting, you should be able to log into your Linkstation 
 
 
 ----
+Status
+----
+
+Confirmed to be working on the model/firmware below:
+
+ - LS-VL 1.68
+ - LS-WXL 1.68
+ - LS-WSXL 1.68
+ - LS-WVL 1.68
+
+
+----
 Credit
 ----
 

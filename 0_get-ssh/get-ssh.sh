@@ -9,8 +9,8 @@ else
 	[ -z "$PW" ] && PW=password
 	path=`dirname $0`
 	echo target IP: $IP
-	echo java -jar acp_commander.jar -t $IP -ip $IP -pw $PW -c \"echo -e ${PW}\\n${PW}\\n\|passwd\"
-	java -jar $path/acp_commander.jar -t $IP -ip $IP -pw $PW -c "echo -e ${PW}\\n${PW}\\n|passwd"
+	echo java -jar acp_commander.jar -t $IP -ip $IP -pw $PW -c \"echo -e ${PW}\\\\n${PW}\\\\n\|passwd\"
+	java -jar $path/acp_commander.jar -t $IP -ip $IP -pw $PW -c "echo -e ${PW}\\\\n${PW}\\\\n|passwd"
 	java -jar $path/acp_commander.jar -t $IP -ip $IP -pw $PW -c "cp /etc/sshd_config /etc/sshd_config.orig"
 	java -jar $path/acp_commander.jar -t $IP -ip $IP -pw $PW -c "sed -i 's/PermitRootLogin no/PermitRootLogin yes/g' /etc/sshd_config"
 	java -jar $path/acp_commander.jar -t $IP -ip $IP -pw $PW -c "sed -i 's/UsePAM yes/UsePAM no/g' /etc/sshd_config"
