@@ -49,8 +49,9 @@ DEB_INCLUDE=uboot-mkimage,uboot-envtools
 elif [ $DISTRO = "wheezy" ]; then
 DEBOOTSTRAP_DEB=debootstrap_1.0.48+deb7u1_all.deb
 DEB_INCLUDE=u-boot-tools
+DEB_EXCLUDE=aptitude-common
 fi
-DEB_EXCLUDE=aptitude,tasksel,tasksel-data,vim-tiny
+DEB_EXCLUDE=${DEB_EXCLUDE},aptitude,tasksel,tasksel-data,vim-tiny
 DEB_INCLUDE=${DEB_INCLUDE},makedev,jfsutils,xfsprogs,ssh,nfs-common,vim-nox,locales,screen,less,hddtemp,smartmontools,rsync,file,mdadm,dialog,busybox
 
 
@@ -144,8 +145,8 @@ debootstrap --arch=armel --exclude=aptitude,tasksel,tasksel-data,vim-tiny --incl
 dpkg -r debootstrap
 
 cat << EOT > $TARGET/etc/apt/sources.list
-deb $MIRROR squeeze main contrib non-free
-deb http://security.debian.org squeeze/updates main contrib non-free
+deb $MIRROR $DISTRO main contrib non-free
+deb http://security.debian.org $DISTRO/updates main contrib non-free
 EOT
 CreateFstab xfs ext3
 cat << EOT > $TARGET/etc/network/interfaces
