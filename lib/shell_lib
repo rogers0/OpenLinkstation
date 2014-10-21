@@ -1,0 +1,103 @@
+# Create file /etc/fstab
+# Argument:
+#	$1: FS type for $TARGET_DEV (default: xfs)
+#	$2: FS type for $MNT_DEV (default: xfs)
+#	TODO: depends on other variable: $TARGET $TARGET_DEV $BOOT_DEV $MNT_DEV
+CreateFstab() {
+	FS1=$1
+	FS2=$2
+	[ -z "$1" ] && FS1=xfs
+	[ -z "$2" ] && FS2=xfs
+	cat << EOT > $TARGET/etc/fstab
+# dev_file	mount point	type	options		dump pass
+$TARGET_DEV	/		$FS1	noatime		0    1
+$BOOT_DEV	/boot		ext3	ro,relatime,errors=continue 0    2
+$SWAP_DEV	none		swap	sw		0    0
+proc		/proc		proc	defaults	0    0
+$MNT_DEV	/mnt		$FS2	noatime		0    2
+EOT
+}
+
+# Create file initrd.buffalo_debian and symbol link it to /boot/initrd.buffalo
+# Argument:
+#	$1: boot device (default: 0x802, means /dev/sda2)
+#	$2: initrd filename (default: /boot/initrd.uimg_debian)
+#	$3: whether to make symbolic link as /boot/initrd.buffalo (default: 0)
+CreateInitrd() {
+	ROOTDEV=$1
+	INITRD_FILE=$2
+	INITRD_LINK=$3
+	[ -z "$1" ] && ROOTDEV=0x802
+	[ -z "$2" ] && INITRD_FILE=/boot/initrd.uimg_debian
+	[ -z "$3" ] && INITRD_LINK=0
+	MDROOT=0
+	ROOTNUM=`printf %d $ROOTDEV`
+	[ $ROOTNUM -gt 2303 ] && MDROOT=1
+	echo CreateInitrd ROOTDEV=$ROOTDEV INITRD_FILE=$INITRD_FILE MDROOT=$MDROOT INITRD_LINK=$INITRD_LINK
+	cd /tmp
+		#gunzip initrd.gz
+		#mkdir INITRD
+		#mount -t ext2 -o ro,loop initrd INITRD
+		#rsync -a INITRD/lib/modules/* /lib/modules/
+		#umount INITRD
+		#rm initrd*
+	dd if=/dev/zero of=initrd bs=1k count=0 seek=3K &> /dev/null
+	mke2fs -F -m 0 -b 1024 initrd > /dev/null
+	tune2fs -c0 -i0 initrd > /dev/null
+	mkdir INITRD
+	mount -o loop initrd INITRD
+	mkdir -p INITRD/{bin,lib,sbin,proc}
+	echo cp -aL /bin/busybox INITRD/bin/; cp -aL /bin/busybox INITRD/bin/
+	echo cp -aL /sbin/pivot_root INITRD/sbin/; cp -aL /sbin/pivot_root INITRD/sbin/
+	if [ $MDROOT -ne 0 ]; then
+		mkdir -p INITRD/{dev,etc/mdadm}
+		(cd INITRD/dev/; echo "MAKEDEV sd{a,b,c,d} md"; MAKEDEV sd{a,b,c,d} md)
+		echo cp -aL /sbin/mdadm INITRD/sbin/; cp -aL /sbin/mdadm INITRD/sbin/
+	fi
+	libs2install=$( ldd INITRD/*bin/* | grep -v "^INITRD/" | sed -e 's/.*=> *//'  -e 's/ *(.*//' | sort -u )
+	echo cp -aL $libs2install INITRD/lib/; cp -aL $libs2install INITRD/lib/
+	(cd INITRD/bin; ln -s busybox sh)
+	if [ $MDROOT -eq 0 ]; then
+		cat << EOT > INITRD/linuxrc
+#!/bin/sh
+mount -t proc none /proc
+echo $ROOTDEV > /proc/sys/kernel/real-root-dev
+umount /proc
+EOT
+	else
+		cat << EOT > INITRD/linuxrc
+#!/bin/sh
+mount -t proc none /proc
+echo 'DEVICE /dev/sd??*' > /etc/mdadm/mdadm.conf
+mdadm -Eb /dev/sd[abcd]* >> /etc/mdadm/mdadm.conf
+mdadm -As --force
+#			TS=\`date +%Y%m%d-%H%M%S\`
+#			mkdir /mnt; mount /dev/md0 /mnt; mkdir -p /mnt/bootlog; cd /mnt/bootlog
+#			dmesg>dmesg_\${TS}.log; cat /proc/mdstat>fs_\${TS}.log; df>>fs_\${TS}.log; mount>>fs_\${TS}.log
+#			echo ROOTDEV=$ROOTDEV >> fs_\${TS}.log
+#			cd -; umount /mnt;rmdir /mnt
+echo $ROOTDEV > /proc/sys/kernel/real-root-dev
+umount /proc
+EOT
+	fi
+	chmod 755 INITRD/linuxrc
+#			mkdir INITRD_DIR
+#			echo rsync -a INITRD/ INITRD_DIR/
+#			rsync -a INITRD/ INITRD_DIR/
+	umount INITRD
+	rmdir INITRD
+	echo gzip -9 initrd
+	gzip -9 initrd
+	echo mkimage -A arm -O linux -T ramdisk -C gzip -a 0x0 -e 0x0 -n initrd -d initrd.gz $INITRD_FILE
+	mkimage -A arm -O linux -T ramdisk -C gzip -a 0x0 -e 0x0 -n initrd -d initrd.gz $INITRD_FILE
+	rm initrd.gz
+	[ $INITRD_LINK -eq 0 ] && return
+	if [ ! -e initrd.buffalo -o -h initrd.buffalo ]; then
+		localname=`basename $INITRD_FILE`
+		(cd /boot/
+		echo ln -sf $localname initrd.buffalo
+		ln -sf $localname initrd.buffalo
+		echo ls -l /boot/initrd.buffalo\*
+		ls -l /boot/initrd.buffalo*)
+	fi
+}
