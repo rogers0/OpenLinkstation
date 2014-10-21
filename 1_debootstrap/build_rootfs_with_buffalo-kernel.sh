@@ -40,6 +40,7 @@ BOOT_DEV=/dev/md0
 MNT_DEV=/dev/md1
 SWAP_DEV=/dev/md10
 fi
+echo ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV INITRD_ROOT_DEVICE=$INITRD_ROOT_DEV BOOT_DEVICE=$BOOT_DEV
 
 # package detail can be found on: https://packages.debian.org/squeeze/all/debootstrap/download
 DEBOOTSTRAP_PATH=/pool/main/d/debootstrap
@@ -72,6 +73,12 @@ EOT
 
 CreateInitrd() {
 cd /tmp
+#gunzip initrd.gz
+#mkdir INITRD
+#mount -t ext2 -o ro,loop initrd INITRD
+#rsync -a INITRD/lib/modules/* /lib/modules/
+#umount INITRD
+#rm initrd*
 dd if=/dev/zero of=initrd bs=1k count=0 seek=3K
 mke2fs -F -m 0 -b 1024 initrd
 tune2fs -c0 -i0 initrd
@@ -103,11 +110,19 @@ mount -t proc none /proc
 echo 'DEVICE /dev/sd??*' > /etc/mdadm/mdadm.conf
 mdadm -Eb /dev/sd[abcd]* >> /etc/mdadm/mdadm.conf
 mdadm -As --force
+	#TS=\`date +%Y%m%d-%H%M%S\`
+	#mkdir /mnt; mount /dev/md0 /mnt; mkdir -p /mnt/bootlog; cd /mnt/bootlog
+	#dmesg>dmesg_\${TS}.log; cat /proc/mdstat>fs_\${TS}.log; df>>fs_\${TS}.log; mount>>fs_\${TS}.log
+	#echo INITRD_ROOT_DEV=$INITRD_ROOT_DEV >> fs_\${TS}.log
+	#cd -; umount /mnt;rmdir /mnt
 echo $INITRD_ROOT_DEV > /proc/sys/kernel/real-root-dev
 umount /proc
 EOT
 fi
 chmod 755 INITRD/linuxrc
+	#mkdir INITRD_DIR
+	#echo rsync -a INITRD/ INITRD_DIR/
+	#rsync -a INITRD/ INITRD_DIR/
 umount INITRD
 rmdir INITRD
 echo gzip -9 initrd
@@ -158,6 +173,24 @@ auto eth1
 iface eth1 inet dhcp
 EOT
 
+#cat << EOT > $TARGET/etc/initramfs-tools/hooks/flash_kernel_set_root
+##!/bin/sh
+#PREREQ=""
+#prereqs() {
+#	echo "\$PREREQ"
+#}
+#case \$1 in
+#prereqs)
+#	prereqs
+#	exit 0
+#	;;
+#esac
+#. /usr/share/initramfs-tools/hook-functions
+#install -d \$DESTDIR/conf
+#echo "ROOT=\"${TARGET_DEV}\"" >> \$DESTDIR/conf/param.conf
+#EOT
+#chmod 755 $TARGET/etc/initramfs-tools/hooks/flash_kernel_set_root
+#dd if=/boot/initrd.buffalo of=$TARGET/tmp/initrd.gz ibs=64 skip=1
 cp `basename $0` $TARGET
 echo Chroot datetime: `date`
 mount --bind /dev $TARGET/dev
@@ -170,6 +203,8 @@ echo move all files under $TARGET to real root \(`readlink -f $TARGET/..`\)
 echo mv $TARGET/\* `readlink -f $TARGET/..`/\; rm -r $TARGET/
 mv $TARGET/* `readlink -f $TARGET/..`/
 rmdir $TARGET
+#echo you need move all files under $TARGET to real root \(`readlink -f $TARGET/..`\)
+#echo be sure what this means then type command: mv $TARGET/\* `readlink -f $TARGET/..`/\; rm -r $TARGET/
 echo End datetime: `date`
 
 elif [ "$1" = "chrooted" ]; then
@@ -202,6 +237,13 @@ apt-get clean
 
 (cd /boot; [ -f initrd.buffalo -a ! -h initrd.buffalo ] && mv initrd.buffalo initrd.buffalo_orig)
 CreateInitrd
+
+#ver=`uname -r`
+#echo depmod -a $ver
+#depmod -a $ver
+#echo update-initramfs -ck $ver
+#update-initramfs -ck $ver
+#mkimage -A arm -O linux -T ramdisk -C none -a 0x00008000 -e 0x00008000 -n $ver -d /boot/initrd.img-$ver /boot/initrd.uimg-$ver
 
 umount /boot
 umount /dev/pts

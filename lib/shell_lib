@@ -61,6 +61,22 @@ CreateInitrd() {
 		cat << EOT > INITRD/linuxrc
 #!/bin/sh
 mount -t proc none /proc
+			dmesg -n 8
+			mkdir -p /sys/kernel/config
+			mount -t configfs none /sys/kernel/config
+			mkdir /sys/kernel/config/netconsole/target0 /sys/kernel/config/netconsole/target1
+			cd /sys/kernel/config/netconsole/target0
+			echo eth0 > dev_name
+			echo 192.168.11.150 > local_ip
+			echo 192.168.11.1 > remote_ip
+			echo 1 > enabled
+			cd /sys/kernel/config/netconsole/target1
+			echo eth1 > dev_name
+			echo 192.168.11.151 > local_ip
+			echo 192.168.11.1 > remote_ip
+			echo 1 > enabled
+			cd /
+			umount /sys/kernel/config
 echo $ROOTDEV > /proc/sys/kernel/real-root-dev
 umount /proc
 EOT
@@ -71,11 +87,29 @@ mount -t proc none /proc
 echo 'DEVICE /dev/sd??*' > /etc/mdadm/mdadm.conf
 mdadm -Eb /dev/sd[abcd]* >> /etc/mdadm/mdadm.conf
 mdadm -As --force
-#			TS=\`date +%Y%m%d-%H%M%S\`
-#			mkdir /mnt; mount /dev/md0 /mnt; mkdir -p /mnt/bootlog; cd /mnt/bootlog
-#			dmesg>dmesg_\${TS}.log; cat /proc/mdstat>fs_\${TS}.log; df>>fs_\${TS}.log; mount>>fs_\${TS}.log
-#			echo ROOTDEV=$ROOTDEV >> fs_\${TS}.log
-#			cd -; umount /mnt;rmdir /mnt
+			TS=\`date +%Y%m%d-%H%M%S\`
+			mkdir /mnt; mount /dev/md0 /mnt; mkdir -p /mnt/bootlog; cd /mnt/bootlog
+			dmesg>dmesg_\${TS}.log; cat /proc/mdstat>fs_\${TS}.log; df>>fs_\${TS}.log; mount>>fs_\${TS}.log
+			echo ROOTDEV=$ROOTDEV >> fs_\${TS}.log
+			cd -; umount /mnt;rmdir /mnt
+
+			dmesg -n 8
+			mkdir -p /sys/kernel/config
+			mount -t configfs none /sys/kernel/config
+			mkdir /sys/kernel/config/netconsole/target0 /sys/kernel/config/netconsole/target1
+			cd /sys/kernel/config/netconsole/target0
+			echo eth0 > dev_name
+			echo 192.168.11.150 > local_ip
+			echo 192.168.11.1 > remote_ip
+			echo 1 > enabled
+			cd /sys/kernel/config/netconsole/target1
+			echo eth1 > dev_name
+			echo 192.168.11.151 > local_ip
+			echo 192.168.11.1 > remote_ip
+			echo 1 > enabled
+			cd /
+			umount /sys/kernel/config
+
 echo $ROOTDEV > /proc/sys/kernel/real-root-dev
 umount /proc
 EOT
@@ -88,9 +122,10 @@ EOT
 	rmdir INITRD
 	echo gzip -9 initrd
 	gzip -9 initrd
-	echo mkimage -A arm -O linux -T ramdisk -C gzip -a 0x0 -e 0x0 -n initrd -d initrd.gz $INITRD_FILE
-	mkimage -A arm -O linux -T ramdisk -C gzip -a 0x0 -e 0x0 -n initrd -d initrd.gz $INITRD_FILE
-	rm initrd.gz
+	cd -
+	echo mkimage -A arm -O linux -T ramdisk -C gzip -a 0x0 -e 0x0 -n initrd -d /tmp/initrd.gz $INITRD_FILE
+	mkimage -A arm -O linux -T ramdisk -C gzip -a 0x0 -e 0x0 -n initrd -d /tmp/initrd.gz $INITRD_FILE
+	rm /tmp/initrd.gz
 	[ $INITRD_LINK -eq 0 ] && return
 	if [ ! -e initrd.buffalo -o -h initrd.buffalo ]; then
 		localname=`basename $INITRD_FILE`
