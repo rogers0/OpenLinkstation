@@ -1,21 +1,42 @@
+InitVal() {
+	[ -z "$RUN_ROOT" ] && RUN_ROOT=$TARGET_DEV
+	[ -z "$RUN_BOOT" ] && RUN_BOOT=$BOOT_DEV
+	echo "ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV BOOT_DEVICE=$BOOT_DEV / rootfs=$RUN_ROOT bootfs=$RUN_BOOT"
+}
+
+GetUUID() {
+	echo $(blkid -o value -s UUID $1)
+}
+
+GetFS() {
+	echo $(blkid -o value -s TYPE $1)
+}
+
 # Create file /etc/fstab
 # Argument:
-#	$1: FS type for $TARGET_DEV (default: xfs)
-#	$2: FS type for $MNT_DEV (default: xfs)
-#	TODO: depends on other variable: $TARGET $TARGET_DEV $BOOT_DEV $MNT_DEV
+#	$1: use dev name (1) or UUID (0)
 CreateFstab() {
-	FS1=$1
-	FS2=$2
-	[ -z "$1" ] && FS1=xfs
-	[ -z "$2" ] && FS2=xfs
-	cat << EOT > $TARGET/etc/fstab
-# dev_file	mount point	type	options		dump pass
-$TARGET_DEV	/		$FS1	noatime		0    1
-$BOOT_DEV	/boot		ext3	ro,relatime,errors=continue 0    2
-$SWAP_DEV	none		swap	sw		0    0
-proc		/proc		proc	defaults	0    0
-$MNT_DEV	/mnt		$FS2	noatime		0    2
+	noUUID=$1
+	[ -z "$1" ] && noUUID=0
+	if [ $noUUID -eq 1 ]; then
+		cat << EOT > $TARGET/etc/fstab
+# dev_file	mount	type	options		dump pass
+proc		/proc	proc	defaults	0    0
+#$SWAP_DEV	none	swap	sw		0    0
+$RUN_ROOT	/	$(GetFS $TARGET_DEV)	relatime	0    1
+$RUN_BOOT	/boot	$(GetFS $BOOT_DEV)	ro,relatime,errors=continue 0    2
+#$MNT_DEV	/mnt	$(GetFS $MNT_DEV)	relatime	0    2
 EOT
+	else
+		cat << EOT > $TARGET/etc/fstab
+# dev_file					mount	type	options		dump pass
+proc						/proc	proc	defaults	0    0
+#$SWAP_DEV					none	swap	sw		0    0
+UUID=$(GetUUID $TARGET_DEV)	/	$(GetFS $TARGET_DEV)	relatime	0    1
+UUID=$(GetUUID $BOOT_DEV)	/boot	$(GetFS $BOOT_DEV)	ro,relatime,errors=continue 0    2
+#UUID=$(GetUUID $MNT_DEV)	/mnt	$(GetFS $MNT_DEV)	relatime	0    2
+EOT
+	fi
 }
 
 # Create file initrd.buffalo_debian and symbol link it to /boot/initrd.buffalo
@@ -27,13 +48,14 @@ CreateInitrd() {
 	ROOTDEV=$1
 	INITRD_FILE=$2
 	INITRD_LINK=$3
-	[ -z "$1" ] && ROOTDEV=0x802
+	[ -z "$1" ] && ROOTDEV=/dev/sda2
 	[ -z "$2" ] && INITRD_FILE=/boot/initrd.uimg_debian
 	[ -z "$3" ] && INITRD_LINK=0
+	ROOTDEV_ID=0x$(stat -c '%t' $ROOTDEV)$(printf %02x 0x$(stat -c '%T' $ROOTDEV))
 	MDROOT=0
-	ROOTNUM=`printf %d $ROOTDEV`
+	ROOTNUM=`printf %d $ROOTDEV_ID`
 	[ $ROOTNUM -gt 2303 ] && MDROOT=1
-	echo CreateInitrd ROOTDEV=$ROOTDEV INITRD_FILE=$INITRD_FILE MDROOT=$MDROOT INITRD_LINK=$INITRD_LINK
+	echo "CreateInitrd ROOTDEV=$ROOTDEV INITRD_FILE=$INITRD_FILE MDROOT=$MDROOT INITRD_LINK=$INITRD_LINK RootDevID=$ROOTDEV_ID (RefID: 0x806:sda6; 0x822:sdb6; 0x901:md1; 0x902:md2; 0x915:md21)"
 	cd /tmp
 		#gunzip initrd.gz
 		#mkdir INITRD
@@ -52,6 +74,8 @@ CreateInitrd() {
 	if [ $MDROOT -ne 0 ]; then
 		mkdir -p INITRD/{dev,etc/mdadm}
 		(cd INITRD/dev/; echo "MAKEDEV sd{a,b,c,d} md"; MAKEDEV sd{a,b,c,d} md)
+		#echo cp -a /dev/sd{a,b,c,d}* /dev/md* INITRD/dev/; cp -a /dev/sd{a,b,c,d}* /dev/md* INITRD/dev/
+		rm -rf INITRD/dev/md/
 		echo cp -aL /sbin/mdadm INITRD/sbin/; cp -aL /sbin/mdadm INITRD/sbin/
 	fi
 	libs2install=$( ldd INITRD/*bin/* | grep -v "^INITRD/" | sed -e 's/.*=> *//'  -e 's/ *(.*//' | sort -u )
@@ -77,7 +101,7 @@ mount -t proc none /proc
 			echo 1 > enabled
 			cd /
 			umount /sys/kernel/config
-echo $ROOTDEV > /proc/sys/kernel/real-root-dev
+echo $ROOTDEV_ID > /proc/sys/kernel/real-root-dev
 umount /proc
 EOT
 	else
@@ -90,7 +114,7 @@ mdadm -As --force
 			TS=\`date +%Y%m%d-%H%M%S\`
 			mkdir /mnt; mount /dev/md0 /mnt; mkdir -p /mnt/bootlog; cd /mnt/bootlog
 			dmesg>dmesg_\${TS}.log; cat /proc/mdstat>fs_\${TS}.log; df>>fs_\${TS}.log; mount>>fs_\${TS}.log
-			echo ROOTDEV=$ROOTDEV >> fs_\${TS}.log
+			echo ROOTDEV=$ROOTDEV ROOTDEV_ID=$ROOTDEV_ID >> fs_\${TS}.log
 			cd -; umount /mnt;rmdir /mnt
 
 			dmesg -n 8
@@ -110,7 +134,7 @@ mdadm -As --force
 			cd /
 			umount /sys/kernel/config
 
-echo $ROOTDEV > /proc/sys/kernel/real-root-dev
+echo $ROOTDEV_ID > /proc/sys/kernel/real-root-dev
 umount /proc
 EOT
 	fi

@@ -1,0 +1,21 @@
+#DEBOOTSTRAP=debootstrap
+DEBOOTSTRAP=cdebootstrap-static
+ROOTPW=password
+#DISTRO=squeeze
+#NEWHOST=LS-Squeeze
+DISTRO=wheezy
+NEWHOST=LS-Wheezy
+
+MIRROR=http://ftp.jp.debian.org/debian
+ARRAY=0 # condition intended to be so complex due to fit various cases: 1st run / 2nd run in chroot w/ or w/o RAID
+[ "x$2" != "x0" -a "x$2" = "x1" ] && ARRAY=1
+[ $ARRAY -eq 0 ] && [ -e /proc/mdstat ] && [ `wc -l /proc/mdstat | awk '{print $1}'` -gt 2 ] && ARRAY=1
+TARGET=/mnt/disk1/rootfs
+TARGET_DEV=/dev/sda6
+BOOT_DEV=/dev/sda1
+MNT_DEV=/dev/sda3
+SWAP_DEV=/dev/null
+# root device when booting. default is same as xxx_DEV
+#RUN_ROOT=/dev/sda2
+#RUN_BOOT=/dev/sda1
+STOCK_KERNEL=0

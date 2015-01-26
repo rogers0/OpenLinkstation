@@ -51,3 +51,4 @@ Credit
 - http://sourceforge.net/p/linkstationwiki/code/HEAD/tree/acp_commander/trunk/
 - http://buffalo.nas-central.org/wiki/Debian_Squeeze_on_LS-WXL
 - http://buffalo.nas-central.org/wiki/Initrd_for_Raid-Boot
+- http://www.hellion.org.uk/blog/posts/debugging-initramfs-over-netconsole/

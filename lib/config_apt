@@ -1,0 +1,27 @@
+# package detail can be found on: https://packages.debian.org/squeeze/all/debootstrap/download
+
+if [ "x$DEBOOTSTRAP" = "xdebootstrap" ]; then
+	DEBOOTSTRAP_PATH=/pool/main/d/debootstrap
+	[ $DISTRO = "squeeze" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.26+squeeze1_all.deb
+	[ $DISTRO = "wheezy" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.48+deb7u1_all.deb
+	DEBOOTSTRAP_OPT=
+	DPKG_DEBOOTSTRAP_OPT=
+else
+	DEBOOTSTRAP_PATH=/pool/main/c/cdebootstrap
+	DEBOOTSTRAP_DEB=cdebootstrap-static_0.5.9_armel.deb
+	DEBOOTSTRAP_OPT="--flavour=minimal --allow-unauthenticated"
+	DPKG_DEBOOTSTRAP_OPT="--force-architecture --force-depends"
+	DEB_INCLUDE=netbase,ifupdown,net-tools,isc-dhcp-client,wget,udev,apt-utils,cron,iptables,logrotate,whiptail
+fi
+
+if [ $DISTRO = "squeeze" ]; then
+	DEB_INCLUDE=${DEB_INCLUDE},uboot-mkimage,uboot-envtools
+elif [ $DISTRO = "wheezy" ]; then
+	DEB_INCLUDE=${DEB_INCLUDE},u-boot-tools
+	DEB_EXCLUDE=aptitude-common
+	#DEB_BPO="initramfs-tools linux-image-kirkwood"
+	DEB_BPO="initramfs-tools linux-image-3.16-0.bpo.3-kirkwood"
+	APT_OPT="-o Acquire::Check-Valid-Until=false"
+fi
+DEB_EXCLUDE=${DEB_EXCLUDE},aptitude,tasksel,tasksel-data,vim-tiny
+DEB_INCLUDE=${DEB_INCLUDE},ssh,vim-nox,locales,screen,less,hddtemp,smartmontools,rsync,file,dialog,busybox,devio,mtr-tiny,rsyslog

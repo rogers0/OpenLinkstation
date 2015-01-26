@@ -11,200 +11,84 @@
 #	http://buffalo.nas-central.org/wiki/Debian_Squeeze_on_LS-WXL
 #	http://buffalo.nas-central.org/wiki/Initrd_for_Raid-Boot
 
-ROOTPW=password
-DISTRO=squeeze
-NEWHOST=LS-Squeeze
-#DISTRO=wheezy
-#NEWHOST=LS-Wheezy
 
-MIRROR=http://ftp.jp.debian.org/debian
-TARGET=/mnt/disk1/rootfs
-TARGET_DEV=/dev/sda6
-BOOT_DEV=/dev/sda1
-MNT_DEV=/dev/sda2
-SWAP_DEV=/dev/sda5
-INITRD_ROOT_DEV=0x806
-ARRAY=0	# condition intended to be so complex due to fit various cases: 1st run / 2nd run in chroot w/ or w/o RAID
-[ "x$2" != "x0" -a "x$2" = "x1" ] && ARRAY=1
-[ $ARRAY -eq 0 ] && [ -f /proc/mdstat ] && [ `wc -l /proc/mdstat | awk '{print $1}'` -gt 2 ] && ARRAY=1
-if [ $ARRAY -eq 1 ]; then
-[ ! -d /mnt/disk1 ] && TARGET=/mnt/array1/rootfs
-if [ -e /dev/md21 ]; then
-TARGET_DEV=/dev/md21
-INITRD_ROOT_DEV=0x915
-else
-TARGET_DEV=/dev/md2
-INITRD_ROOT_DEV=0x902	# 0x806:sda6; 0x822:sdb6; 0x901:md1; 0x902:md2; 0x915:md21
-fi
-BOOT_DEV=/dev/md0
-MNT_DEV=/dev/md1
-SWAP_DEV=/dev/md10
-fi
-echo ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV INITRD_ROOT_DEVICE=$INITRD_ROOT_DEV BOOT_DEVICE=$BOOT_DEV
+SCRIPT_ROOT=$(readlink -f $(dirname $0))
+SRC_ROOT=$(readlink -f $(dirname $0)/..)
 
-# package detail can be found on: https://packages.debian.org/squeeze/all/debootstrap/download
-DEBOOTSTRAP_PATH=/pool/main/d/debootstrap
-if [ $DISTRO = "squeeze" ]; then
-DEBOOTSTRAP_DEB=debootstrap_1.0.26+squeeze1_all.deb
-DEB_INCLUDE=uboot-mkimage,uboot-envtools
-elif [ $DISTRO = "wheezy" ]; then
-DEBOOTSTRAP_DEB=debootstrap_1.0.48+deb7u1_all.deb
-DEB_INCLUDE=u-boot-tools
-DEB_EXCLUDE=aptitude-common
-fi
-DEB_EXCLUDE=${DEB_EXCLUDE},aptitude,tasksel,tasksel-data,vim-tiny
-DEB_INCLUDE=${DEB_INCLUDE},makedev,jfsutils,xfsprogs,ssh,nfs-common,vim-nox,locales,screen,less,hddtemp,smartmontools,rsync,file,mdadm,dialog,busybox
-
-
-CreateFstab() {
-FS1=$1		# $1 is the FS type for $TARGET_DEV
-FS2=$2		# $2 is the FS type for $MNT_DEV
-[ -z $1 ] && FS1=xfs
-[ -z $2 ] && FS2=xfs
-cat << EOT > $TARGET/etc/fstab
-# dev_file	mount point	type	options		dump pass
-$TARGET_DEV	/		$FS1	noatime		0    1
-$BOOT_DEV	/boot		ext3	ro,relatime,errors=continue 0    2
-$SWAP_DEV	none		swap	sw		0    0
-proc		/proc		proc	defaults	0    0
-$MNT_DEV	/mnt		$FS2	noatime		0    2
-EOT
-}
-
-CreateInitrd() {
-cd /tmp
-#gunzip initrd.gz
-#mkdir INITRD
-#mount -t ext2 -o ro,loop initrd INITRD
-#rsync -a INITRD/lib/modules/* /lib/modules/
-#umount INITRD
-#rm initrd*
-dd if=/dev/zero of=initrd bs=1k count=0 seek=3K
-mke2fs -F -m 0 -b 1024 initrd
-tune2fs -c0 -i0 initrd
-mkdir INITRD
-mount -o loop initrd INITRD
-mkdir -p INITRD/{bin,lib,sbin,proc}
-cp -aL /bin/busybox INITRD/bin/
-cp -aL /sbin/pivot_root INITRD/sbin/
-if [ $ARRAY -eq 1 ]; then
-mkdir -p INITRD/{dev,etc/mdadm}
-(cd INITRD/dev/; MAKEDEV sd{a,b,c,d} md)
-cp -aL /sbin/mdadm INITRD/sbin/
-fi
-libs2install=$( ldd INITRD/*bin/* | grep -v "^INITRD/" | sed -e 's/.*=> *//'  -e 's/ *(.*//' | sort -u )
-echo cp -aL $libs2install INITRD/lib/
-cp -aL $libs2install INITRD/lib/
-(cd INITRD/bin; ln -s busybox sh)
-if [ $ARRAY -eq 0 ]; then
-cat << EOT > INITRD/linuxrc
-#!/bin/sh
-mount -t proc none /proc
-echo $INITRD_ROOT_DEV > /proc/sys/kernel/real-root-dev
-umount /proc
-EOT
-elif [ $ARRAY -eq 1 ]; then
-cat << EOT > INITRD/linuxrc
-#!/bin/sh
-mount -t proc none /proc
-echo 'DEVICE /dev/sd??*' > /etc/mdadm/mdadm.conf
-mdadm -Eb /dev/sd[abcd]* >> /etc/mdadm/mdadm.conf
-mdadm -As --force
-	#TS=\`date +%Y%m%d-%H%M%S\`
-	#mkdir /mnt; mount /dev/md0 /mnt; mkdir -p /mnt/bootlog; cd /mnt/bootlog
-	#dmesg>dmesg_\${TS}.log; cat /proc/mdstat>fs_\${TS}.log; df>>fs_\${TS}.log; mount>>fs_\${TS}.log
-	#echo INITRD_ROOT_DEV=$INITRD_ROOT_DEV >> fs_\${TS}.log
-	#cd -; umount /mnt;rmdir /mnt
-echo $INITRD_ROOT_DEV > /proc/sys/kernel/real-root-dev
-umount /proc
-EOT
-fi
-chmod 755 INITRD/linuxrc
-	#mkdir INITRD_DIR
-	#echo rsync -a INITRD/ INITRD_DIR/
-	#rsync -a INITRD/ INITRD_DIR/
-umount INITRD
-rmdir INITRD
-echo gzip -9 initrd
-gzip -9 initrd
-mkimage -A arm -O linux -T ramdisk -C gzip -a 0x0 -e 0x0 -n initrd -d initrd.gz /boot/initrd.buffalo_debian
-rm initrd.gz
-(cd /boot; if [ ! -e initrd.buffalo -o -h initrd.buffalo ]; then
-	echo ln -sf initrd.buffalo_debian initrd.buffalo
-	ln -sf initrd.buffalo_debian initrd.buffalo
-	echo ls -l /boot/initrd.buffalo\*
-	ls -l /boot/initrd.buffalo*
-fi)
-}
-
+. $SCRIPT_ROOT/config
+. $SRC_ROOT/lib/config_apt
+. $SRC_ROOT/lib/shell_lib
 
 if [ -z "$1" ]; then
 
 echo Start datetime: `date`
 echo 1st stage: debootstrap
 
+InitVal
+
 mkdir -p $TARGET/etc/default/ $TARGET/etc/apt/ $TARGET/etc/ssh/ $TARGET/lib/modules/
 echo $NEWHOST > $TARGET/etc/hostname
 echo en_US.UTF-8 UTF-8 > $TARGET/etc/locale.gen
 echo LANG=en_US.UTF-8 > $TARGET/etc/default/locale
 cp -a /etc/localtime $TARGET/etc/
-cp -a /etc/ssh_host_{dsa,rsa}* $TARGET/etc/ssh/
-chmod 400 $TARGET/etc/ssh/ssh_host_{dsa,rsa}_key
-chmod 444 $TARGET/etc/ssh/ssh_host_{dsa,rsa}_key.pub
+if [ -d /etc/ssh/ ]; then
+cp -a /etc/ssh/ssh_host_{dsa,rsa,key,ecdsa}* $TARGET/etc/ssh/ &> /dev/null
+else
+cp -a /etc/ssh_host_{dsa,rsa,key,ecdsa}* $TARGET/etc/ssh/ &> /dev/null
+fi
+chmod 400 $TARGET/etc/ssh/ssh_host_{dsa,rsa,ecdsa}_key $TARGET/etc/ssh/ssh_host_key &> /dev/null
+chmod 444 $TARGET/etc/ssh/ssh_host_{dsa,rsa,ecdsa}_key.pub $TARGET/etc/ssh/ssh_host_key.pub &> /dev/null
 rsync -a /lib/modules/`uname -r` $TARGET/lib/modules/
 
+[ ! -d /tmp ] && if [ -d /mnt/ram ]; then
+	ln -s /mnt/ram /tmp
+else
+	ln -s $SRC_ROOT /tmp
+fi
 wget -nv -O /tmp/$DEBOOTSTRAP_DEB $MIRROR$DEBOOTSTRAP_PATH/$DEBOOTSTRAP_DEB
-dpkg -i /tmp/$DEBOOTSTRAP_DEB
+dpkg -i $DPKG_DEBOOTSTRAP_OPT /tmp/$DEBOOTSTRAP_DEB
 rm /tmp/$DEBOOTSTRAP_DEB
-debootstrap --arch=armel --exclude=aptitude,tasksel,tasksel-data,vim-tiny --include=makedev,jfsutils,xfsprogs,ssh,nfs-common,vim-nox,locales,screen,less,hddtemp,smartmontools,rsync,file,uboot-mkimage,uboot-envtools,mdadm,dialog,busybox $DISTRO $TARGET $MIRROR
-dpkg -r debootstrap
+[ $ARRAY -eq 1 ] && DEB_INCLUDE=${DEB_INCLUDE},mdadm
+[ $(GetFS $TARGET_DEV) = "xfs" ] && DEB_INCLUDE=${DEB_INCLUDE},xfsprogs
+[ $(GetFS $TARGET_DEV) = "jfs" ] && DEB_INCLUDE=${DEB_INCLUDE},jfsutils
+
+echo $DEBOOTSTRAP --arch=armel $DEBOOTSTRAP_OPT --exclude=$DEB_EXCLUDE --include=$DEB_INCLUDE $DISTRO $TARGET $MIRROR
+$DEBOOTSTRAP --arch=armel $DEBOOTSTRAP_OPT --exclude=$DEB_EXCLUDE --include=$DEB_INCLUDE $DISTRO $TARGET $MIRROR
+dpkg -r $DEBOOTSTRAP
 
 cat << EOT > $TARGET/etc/apt/sources.list
 deb $MIRROR $DISTRO main contrib non-free
+deb $MIRROR ${DISTRO}-updates main contrib non-free
+deb $MIRROR ${DISTRO}-backports main contrib non-free
 deb http://security.debian.org $DISTRO/updates main contrib non-free
 EOT
-CreateFstab xfs ext3
+# TODO: only this kernel boots well now..
+[ $DISTRO = "wheezy" ] && echo "deb http://snapshot.debian.org/archive/debian/20141214T100745Z/ wheezy-backports main" >> $TARGET/etc/apt/sources.list
+CreateFstab $STOCK_KERNEL
 cat << EOT > $TARGET/etc/network/interfaces
 auto lo
 iface lo inet loopback
 auto eth0
 iface eth0 inet dhcp
-auto eth1
-iface eth1 inet dhcp
+#auto eth1
+#iface eth1 inet dhcp
 EOT
 
-#cat << EOT > $TARGET/etc/initramfs-tools/hooks/flash_kernel_set_root
-##!/bin/sh
-#PREREQ=""
-#prereqs() {
-#	echo "\$PREREQ"
-#}
-#case \$1 in
-#prereqs)
-#	prereqs
-#	exit 0
-#	;;
-#esac
-#. /usr/share/initramfs-tools/hook-functions
-#install -d \$DESTDIR/conf
-#echo "ROOT=\"${TARGET_DEV}\"" >> \$DESTDIR/conf/param.conf
-#EOT
-#chmod 755 $TARGET/etc/initramfs-tools/hooks/flash_kernel_set_root
 #dd if=/boot/initrd.buffalo of=$TARGET/tmp/initrd.gz ibs=64 skip=1
-cp `basename $0` $TARGET
+cp -a $SRC_ROOT $TARGET
 echo Chroot datetime: `date`
 mount --bind /dev $TARGET/dev
-LANG=C chroot $TARGET /`basename $0` chrooted $ARRAY
+echo LANG=C chroot $TARGET /$(basename $SRC_ROOT)/$(basename $SCRIPT_ROOT)/$(basename $0) chrooted $ARRAY
+LANG=C chroot $TARGET /$(basename $SRC_ROOT)/$(basename $SCRIPT_ROOT)/$(basename $0) chrooted $ARRAY
+[ $? -gt 0 ] && exit 0
 umount $TARGET/dev
 cd $TARGET
 echo tar cf ../rootfs.tar .
 tar cf ../rootfs.tar .
-echo move all files under $TARGET to real root \(`readlink -f $TARGET/..`\)
-echo mv $TARGET/\* `readlink -f $TARGET/..`/\; rm -r $TARGET/
+echo move all files under $TARGET to real root \($(readlink -f $TARGET/..)\)
+echo mv $TARGET/\* $(readlink -f $TARGET/..)/\; rm -r $TARGET/
 mv $TARGET/* `readlink -f $TARGET/..`/
 rmdir $TARGET
-#echo you need move all files under $TARGET to real root \(`readlink -f $TARGET/..`\)
-#echo be sure what this means then type command: mv $TARGET/\* `readlink -f $TARGET/..`/\; rm -r $TARGET/
 echo End datetime: `date`
 
 elif [ "$1" = "chrooted" ]; then
@@ -212,10 +96,14 @@ elif [ "$1" = "chrooted" ]; then
 echo 2nd stage: CHROOT: build initrd image to boot from temp device
 
 mount -t proc proc /proc
-(cd /dev/; [ -d .udev ] && mv .udev .oldudev; MAKEDEV sd{a,b,c,d} md; [ -d .oldudev ] && mv .oldudev .udev)
+#(cd /dev/; [ -d .udev ] && mv .udev .oldudev; MAKEDEV sd{a,b,c,d} md; [ -d .oldudev ] && mv .oldudev .udev)
 mount -t sysfs sysfs /sys
 mount -t devpts devpts /dev/pts
-mount $BOOT_DEV /boot
+mount $BOOT_DEV /boot || (mount -o ro $BOOT_DEV /boot; mount -o remount,rw /boot)
+echo df -h; df -h
+
+InitVal
+
 echo "echo -e ${ROOTPW}\\n${ROOTPW}\\n|passwd"
 echo -e ${ROOTPW}\\n${ROOTPW}\\n|passwd
 sed -i 's/^1:2345:respawn:/#1:2345:respawn:/' /etc/inittab
@@ -225,25 +113,62 @@ sed -i 's/^4:23:respawn:/#4:23:respawn:/' /etc/inittab
 sed -i 's/^5:23:respawn:/#5:23:respawn:/' /etc/inittab
 sed -i 's/^6:23:respawn:/#6:23:respawn:/' /etc/inittab
 echo "T0:23:respawn:/sbin/getty -L ttyS0 115200 vt100" >> /etc/inittab
+echo '/dev/mtd2 0x00000 0x10000 0x10000' >> /etc/fw_env.config
+#sed -i 's/exit 0/rmmod ehci_orion ehci_hcd usbcore usb_common md_mod\nrmmod hmac sha1_generic sha1_arm mv_cesa\nrmmod netconsole configfs\n\n&/' /etc/rc.local
+echo "PATH=\$PATH:~/bin" >> /root/.bashrc
 if [ $DISTRO = "squeeze" ]; then
 sed -i 's/^UTC=yes/UTC=no/' /etc/default/rcS
 elif [ $DISTRO = "wheezy" ]; then
 echo -e "0.0 0 0.0\n0\nLOCAL" > /etc/adjtime
 fi
-depmod -a `uname -r`
-apt-get update
+sed -i 's/^#FSCKFIX=no/&\nFSCKFIX=yes/' /etc/default/rcS
+[ "x$DEBOOTSTRAP" = "xcdebootstrap-static" ] && dpkg -r cdebootstrap-helper-rc.d
+echo 'Acquire::CompressionTypes::Order { "gz"; "bzip2"; "lzma"; };' >> /etc/apt/apt.conf.d/80-roger.conf
+apt-get $APT_OPT update
 apt-get dist-upgrade -y
+[ $(GetFS $TARGET_DEV) = "btrfs" ] && DEB_BPO="${DEB_BPO} btrfs-tools"
+[ -n "$DEB_BPO" ] && apt-get install -y --no-install-recommends -t ${DISTRO}-backports $DEB_BPO
 apt-get clean
 
-(cd /boot; [ -f initrd.buffalo -a ! -h initrd.buffalo ] && mv initrd.buffalo initrd.buffalo_orig)
-CreateInitrd
+echo 'blacklist ipv6' > /etc/modprobe.d/blacklist_local.conf
+echo 'ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="deadline"' > /etc/udev/rules.d/80-local.rules
+cp -a /usr/share/initramfs-tools/init /usr/share/initramfs-tools/init.orig
+sed -i 's:exec >/run/initramfs/initramfs.debug 2>&1:exec >/dev/kmsg 2>\&1\t# &:' /usr/share/initramfs-tools/init
+sed -i 's:for x in \$(cat /proc/cmdline):& Debug:' /usr/share/initramfs-tools/init
+sed -i 's/^MODULES=most/MODULES=list/' /etc/initramfs-tools/initramfs.conf
+sed -i 's/^BUSYBOX=y/BUSYBOX=n/' /etc/initramfs-tools/initramfs.conf
 
-#ver=`uname -r`
-#echo depmod -a $ver
-#depmod -a $ver
-#echo update-initramfs -ck $ver
-#update-initramfs -ck $ver
-#mkimage -A arm -O linux -T ramdisk -C none -a 0x00008000 -e 0x00008000 -n $ver -d /boot/initrd.img-$ver /boot/initrd.uimg-$ver
+cat << EOT >> /etc/initramfs-tools/modules
+mv643xx_eth
+netconsole netconsole=@192.168.11.150/,6666@192.168.11.1/
+mvmdio
+sata_mv
+sd_mod
+$(GetFS $TARGET_DEV)
+EOT
+[ $ARRAY -eq 1 ] && echo raid1 >> /etc/initramfs-tools/modules
+[ "x$(GetFS $TARGET_DEV)" = "xbtrfs" ] && echo crc32c >> /etc/initramfs-tools/modules
+
+mkdir -p /root/bin
+cp -a $SCRIPT_ROOT/scripts/*.sh /root/bin
+cp -a $SCRIPT_ROOT/dtb /boot/
+cp -a $SCRIPT_ROOT/scripts/initramfs-tools_hooks_set_root /etc/initramfs-tools/hooks/set_root
+cat << EOT >> /etc/initramfs-tools/hooks/set_root
+#echo "ROOT=/dev/disk/by-uuid/$(GetUUID $TARGET_DEV)" >> \$DESTDIR/conf/param.conf
+echo "ROOT=$RUN_ROOT" >> \$DESTDIR/conf/param.conf
+EOT
+[ $(GetFS $TARGET_DEV) = "xfs" -o $(GetFS $TARGET_DEV) = "jfs" -o $(GetFS $TARGET_DEV) = "ext4" ] && echo "#echo \"ROOTFLAGS='-o discard'\" >> \$DESTDIR/conf/param.conf" >> /etc/initramfs-tools/hooks/set_root
+echo "exit 0" >> /etc/initramfs-tools/hooks/set_root
+
+(cd /boot; [ -f initrd.buffalo -a ! -h initrd.buffalo ] && mv initrd.buffalo initrd.buffalo_orig;
+[ -f uImage.buffalo -a ! -h uImage.buffalo ] && mv uImage.buffalo uImage.buffalo_orig)
+if [ $STOCK_KERNEL -eq 0 ]; then
+	update-initramfs -uk all
+	/root/bin/kernel.sh 1
+else
+	#CreateInitrd $INITRD_ROOT_DEV /boot/initrd.buffalo_debian_$(echo $INITRD_ROOT_DEV |cut -dx -f2) 1
+	CreateInitrd $TARGET_DEV /boot/initrd.buffalo_debian_$(basename $TARGET_DEV) 1
+fi
 
 umount /boot
 umount /dev/pts
@@ -254,10 +179,11 @@ elif [ "$1" = "debian" ]; then
 
 echo 3rd stage: Build Debian rootfs on final target device
 
+InitVal
+
 TARGET=/mnt
 TARGET_DEV=/dev/sda2
 MNT_DEV=/dev/sda6
-INITRD_ROOT_DEV=0x802
 if [ $ARRAY -eq 1 ]; then
 TARGET_DEV=/dev/md1
 if [ -e /dev/md21 ]; then
@@ -265,10 +191,9 @@ MNT_DEV=/dev/md21
 else
 MNT_DEV=/dev/md2
 fi
-INITRD_ROOT_DEV=0x901	# 0x806:sda6; 0x822:sdb6; 0x901:md1; 0x902:md2; 0x915:md21
 fi
 
-echo ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV INITRD_ROOT_DEVICE=$INITRD_ROOT_DEV
+echo ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV
 
 if [ -f /rootfs.tar ]; then
 	ARG=xf;  TAR=/rootfs.tar
@@ -293,12 +218,12 @@ fi
 echo tar $ARG $TAR
 tar $ARG $TAR)
 
-CreateFstab ext3 xfs
+CreateFstab $STOCK_KERNEL
 mount -o remount,rw /boot
 initrd_bak=initrd.buffalo_debian_tmp-`basename $MNT_DEV`
 (cd /boot; [ -f $initrd_bak ] && rm $initrd_bak;
 [ -f initrd.buffalo_debian ] && mv initrd.buffalo_debian $initrd_bak)
-CreateInitrd
+[ $STOCK_KERNEL -eq 1 ] && CreateInitrd $TARGET_DEV /boot/initrd.buffalo_debian_$(basename $TARGET_DEV) 1
 mount -o remount,ro /boot
 
 fi
