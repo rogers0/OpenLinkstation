@@ -64,6 +64,7 @@ deb http://security.debian.org $DISTRO/updates main contrib non-free
 EOT
 # TODO: only this kernel boots well now..
 [ $DISTRO = "wheezy" ] && echo "deb http://snapshot.debian.org/archive/debian/20141214T100745Z/ wheezy-backports main" >> $TARGET/etc/apt/sources.list
+[ $DISTRO = "jessie" ] && echo "deb http://snapshot.debian.org/archive/debian/20141104T041106Z/ jessie main" >> $TARGET/etc/apt/sources.list
 CreateFstab $STOCK_KERNEL
 cat << EOT > $TARGET/etc/network/interfaces
 auto lo
@@ -106,13 +107,7 @@ InitVal
 
 echo "echo -e ${ROOTPW}\\n${ROOTPW}\\n|passwd"
 echo -e ${ROOTPW}\\n${ROOTPW}\\n|passwd
-sed -i 's/^1:2345:respawn:/#1:2345:respawn:/' /etc/inittab
-sed -i 's/^2:23:respawn:/#2:23:respawn:/' /etc/inittab
-sed -i 's/^3:23:respawn:/#3:23:respawn:/' /etc/inittab
-sed -i 's/^4:23:respawn:/#4:23:respawn:/' /etc/inittab
-sed -i 's/^5:23:respawn:/#5:23:respawn:/' /etc/inittab
-sed -i 's/^6:23:respawn:/#6:23:respawn:/' /etc/inittab
-echo "T0:23:respawn:/sbin/getty -L ttyS0 115200 vt100" >> /etc/inittab
+[ $DISTRO = "jessie" ] && sed -i '/PermitRootLogin/s/without-password/yes/' /etc/ssh/sshd_config
 echo '/dev/mtd2 0x00000 0x10000 0x10000' >> /etc/fw_env.config
 #sed -i 's/exit 0/rmmod ehci_orion ehci_hcd usbcore usb_common md_mod\nrmmod hmac sha1_generic sha1_arm mv_cesa\nrmmod netconsole configfs\n\n&/' /etc/rc.local
 echo "PATH=\$PATH:~/bin" >> /root/.bashrc
@@ -126,10 +121,21 @@ sed -i 's/^#FSCKFIX=no/&\nFSCKFIX=yes/' /etc/default/rcS
 echo 'Acquire::CompressionTypes::Order { "gz"; "bzip2"; "lzma"; };' >> /etc/apt/apt.conf.d/80-roger.conf
 apt-get $APT_OPT update
 apt-get dist-upgrade -y
-[ $(GetFS $TARGET_DEV) = "btrfs" ] && DEB_BPO="${DEB_BPO} btrfs-tools"
+if [ $(GetFS $TARGET_DEV) = "btrfs" ]; then
+	[ $DISTRO = "wheezy" ] && DEB_BPO="${DEB_BPO} btrfs-tools"
+	[ $DISTRO = "jessie" ] && DEB_ADD="${DEB_ADD} btrfs-tools"
+fi
 [ -n "$DEB_BPO" ] && apt-get install -y --no-install-recommends -t ${DISTRO}-backports $DEB_BPO
+[ -n "$DEB_ADD" ] && apt-get install -y --no-install-recommends $DEB_ADD
 apt-get clean
 
+sed -i 's/^1:2345:respawn:/#1:2345:respawn:/' /etc/inittab
+sed -i 's/^2:23:respawn:/#2:23:respawn:/' /etc/inittab
+sed -i 's/^3:23:respawn:/#3:23:respawn:/' /etc/inittab
+sed -i 's/^4:23:respawn:/#4:23:respawn:/' /etc/inittab
+sed -i 's/^5:23:respawn:/#5:23:respawn:/' /etc/inittab
+sed -i 's/^6:23:respawn:/#6:23:respawn:/' /etc/inittab
+echo "T0:23:respawn:/sbin/getty -L ttyS0 115200 vt100" >> /etc/inittab
 echo 'blacklist ipv6' > /etc/modprobe.d/blacklist_local.conf
 echo 'ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="deadline"' > /etc/udev/rules.d/80-local.rules
 cp -a /usr/share/initramfs-tools/init /usr/share/initramfs-tools/init.orig

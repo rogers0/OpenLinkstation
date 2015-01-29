@@ -3,8 +3,8 @@ DEBOOTSTRAP=cdebootstrap-static
 ROOTPW=password
 #DISTRO=squeeze
 #NEWHOST=LS-Squeeze
-DISTRO=wheezy
-NEWHOST=LS-Wheezy
+DISTRO=jessie
+NEWHOST=LS-Jessie
 
 MIRROR=http://ftp.jp.debian.org/debian
 ARRAY=0 # condition intended to be so complex due to fit various cases: 1st run / 2nd run in chroot w/ or w/o RAID
