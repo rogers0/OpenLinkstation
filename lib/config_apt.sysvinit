@@ -26,7 +26,7 @@ elif [ $DISTRO = "wheezy" ]; then
 elif [ $DISTRO = "jessie" ]; then
 	DEB_INCLUDE=${DEB_INCLUDE},u-boot-tools
 	#DEB_ADD="linux-image-kirkwood sysvinit-core systemd-sysv- systemd-"
-	DEB_ADD="linux-image-3.16-3-kirkwood"
+	DEB_ADD="linux-image-3.16-3-kirkwood sysvinit-core systemd-sysv- systemd-"
 	APT_OPT="-o Acquire::Check-Valid-Until=false"
 fi
 DEB_EXCLUDE=${DEB_EXCLUDE},aptitude,tasksel,tasksel-data,vim-tiny

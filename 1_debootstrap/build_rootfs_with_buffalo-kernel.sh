@@ -129,13 +129,15 @@ fi
 [ -n "$DEB_ADD" ] && apt-get install -y --no-install-recommends $DEB_ADD
 apt-get clean
 
-sed -i 's/^1:2345:respawn:/#1:2345:respawn:/' /etc/inittab
-sed -i 's/^2:23:respawn:/#2:23:respawn:/' /etc/inittab
-sed -i 's/^3:23:respawn:/#3:23:respawn:/' /etc/inittab
-sed -i 's/^4:23:respawn:/#4:23:respawn:/' /etc/inittab
-sed -i 's/^5:23:respawn:/#5:23:respawn:/' /etc/inittab
-sed -i 's/^6:23:respawn:/#6:23:respawn:/' /etc/inittab
-echo "T0:23:respawn:/sbin/getty -L ttyS0 115200 vt100" >> /etc/inittab
+if [ -f /etc/inittab ]; then
+	sed -i 's/^1:2345:respawn:/#1:2345:respawn:/' /etc/inittab
+	sed -i 's/^2:23:respawn:/#2:23:respawn:/' /etc/inittab
+	sed -i 's/^3:23:respawn:/#3:23:respawn:/' /etc/inittab
+	sed -i 's/^4:23:respawn:/#4:23:respawn:/' /etc/inittab
+	sed -i 's/^5:23:respawn:/#5:23:respawn:/' /etc/inittab
+	sed -i 's/^6:23:respawn:/#6:23:respawn:/' /etc/inittab
+	echo "T0:23:respawn:/sbin/getty -L ttyS0 115200 vt100" >> /etc/inittab
+fi
 echo 'blacklist ipv6' > /etc/modprobe.d/blacklist_local.conf
 echo 'ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="deadline"' > /etc/udev/rules.d/80-local.rules
 cp -a /usr/share/initramfs-tools/init /usr/share/initramfs-tools/init.orig
@@ -164,6 +166,7 @@ cat << EOT >> /etc/initramfs-tools/hooks/set_root
 echo "ROOT=$RUN_ROOT" >> \$DESTDIR/conf/param.conf
 EOT
 [ $(GetFS $TARGET_DEV) = "xfs" -o $(GetFS $TARGET_DEV) = "jfs" -o $(GetFS $TARGET_DEV) = "ext4" ] && echo "#echo \"ROOTFLAGS='-o discard'\" >> \$DESTDIR/conf/param.conf" >> /etc/initramfs-tools/hooks/set_root
+[ $(GetFS $TARGET_DEV) = "btrfs" ] && echo "#echo \"ROOTFLAGS='-o ssd'\" >> \$DESTDIR/conf/param.conf" >> /etc/initramfs-tools/hooks/set_root
 echo "exit 0" >> /etc/initramfs-tools/hooks/set_root
 
 (cd /boot; [ -f initrd.buffalo -a ! -h initrd.buffalo ] && mv initrd.buffalo initrd.buffalo_orig;

@@ -38,10 +38,10 @@ Status
 
 Confirmed to be working on the model/firmware below:
 
- - LS-VL 1.69 (Buffalo stock kernel)
+ - LS-VL 1.69 (Debian Wheezy-backport / Jessie kernel + own DTB)
  - LS-WXL 1.69 (Debian Wheezy-backport / Jessie kernel + own DTB)
  - LS-WSXL 1.69 (Debian Wheezy-backport / Jessie kernel + own DTB)
- - LS-WVL 1.69 (Buffalo stock kernel)
+ - LS-WVL 1.69 (Debian Wheezy-backport / Jessie kernel + own DTB)
 
 
 ----
