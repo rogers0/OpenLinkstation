@@ -18,4 +18,3 @@ SWAP_DEV=/dev/null
 # root device when booting. default is same as xxx_DEV
 #RUN_ROOT=/dev/sda2
 #RUN_BOOT=/dev/sda1
-STOCK_KERNEL=0

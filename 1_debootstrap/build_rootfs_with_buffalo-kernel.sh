@@ -45,16 +45,31 @@ rsync -a /lib/modules/`uname -r` $TARGET/lib/modules/
 else
 	ln -s $SRC_ROOT /tmp
 fi
-wget -nv -O /tmp/$DEBOOTSTRAP_DEB $MIRROR$DEBOOTSTRAP_PATH/$DEBOOTSTRAP_DEB
-dpkg -i $DPKG_DEBOOTSTRAP_OPT /tmp/$DEBOOTSTRAP_DEB
-rm /tmp/$DEBOOTSTRAP_DEB
+if [ $DISTRO = "jessie" ]; then
+	# dirty hack for Jessie. because there's no xz uncompression support on linkstation, but Jessie's deb is packed by xz
+	mkdir /tmp/cdebootstrap; cd $_
+	tar xfz $SCRIPT_ROOT/bin/cdebootstrap*.tar.gz
+	DEBOOTSTRAP=./cdebootstrap
+else
+	wget -nv -O /tmp/$DEBOOTSTRAP_DEB $MIRROR$DEBOOTSTRAP_PATH/$DEBOOTSTRAP_DEB
+	dpkg -i $DPKG_DEBOOTSTRAP_OPT /tmp/$DEBOOTSTRAP_DEB
+	rm /tmp/$DEBOOTSTRAP_DEB
+fi
+
 [ $ARRAY -eq 1 ] && DEB_INCLUDE=${DEB_INCLUDE},mdadm
 [ $(GetFS $TARGET_DEV) = "xfs" ] && DEB_INCLUDE=${DEB_INCLUDE},xfsprogs
 [ $(GetFS $TARGET_DEV) = "jfs" ] && DEB_INCLUDE=${DEB_INCLUDE},jfsutils
 
 echo $DEBOOTSTRAP --arch=armel $DEBOOTSTRAP_OPT --exclude=$DEB_EXCLUDE --include=$DEB_INCLUDE $DISTRO $TARGET $MIRROR
 $DEBOOTSTRAP --arch=armel $DEBOOTSTRAP_OPT --exclude=$DEB_EXCLUDE --include=$DEB_INCLUDE $DISTRO $TARGET $MIRROR
-dpkg -r $DEBOOTSTRAP
+RET=$?
+if [ $DISTRO = "jessie" ]; then
+	rm -rf /tmp/cdebootstrap
+	cd -
+else
+	dpkg -r $DEBOOTSTRAP
+fi
+[ $RET -gt 0 ] && echo DEBOOTSTRAP failed. && exit 1
 
 cat << EOT > $TARGET/etc/apt/sources.list
 deb $MIRROR $DISTRO main contrib non-free
@@ -62,10 +77,7 @@ deb $MIRROR ${DISTRO}-updates main contrib non-free
 deb $MIRROR ${DISTRO}-backports main contrib non-free
 deb http://security.debian.org $DISTRO/updates main contrib non-free
 EOT
-# TODO: only this kernel boots well now..
-[ $DISTRO = "wheezy" ] && echo "deb http://snapshot.debian.org/archive/debian/20141214T100745Z/ wheezy-backports main" >> $TARGET/etc/apt/sources.list
-[ $DISTRO = "jessie" ] && echo "deb http://snapshot.debian.org/archive/debian/20141104T041106Z/ jessie main" >> $TARGET/etc/apt/sources.list
-CreateFstab $STOCK_KERNEL
+CreateFstab $BUFFALO_KERNEL
 cat << EOT > $TARGET/etc/network/interfaces
 auto lo
 iface lo inet loopback
@@ -125,8 +137,20 @@ if [ $(GetFS $TARGET_DEV) = "btrfs" ]; then
 	[ $DISTRO = "wheezy" ] && DEB_BPO="${DEB_BPO} btrfs-tools"
 	[ $DISTRO = "jessie" ] && DEB_ADD="${DEB_ADD} btrfs-tools"
 fi
+if [ -n "$MACHINE_ID" ]; then
+	[ $DISTRO = "wheezy" ] && DEB_BPO="${DEB_BPO} flash-kernel"
+	[ $DISTRO = "jessie" ] && DEB_ADD="${DEB_ADD} flash-kernel"
+fi
 [ -n "$DEB_BPO" ] && apt-get install -y --no-install-recommends -t ${DISTRO}-backports $DEB_BPO
 [ -n "$DEB_ADD" ] && apt-get install -y --no-install-recommends $DEB_ADD
+if [ -n "$MACHINE_ID" ]; then
+	kernel=$(dpkg -l |grep linux-image|head -n1|cut -d" " -f3)
+	cp -a $SCRIPT_ROOT/dtb /etc/flash-kernel/
+	[ -n "$kernel" -a -d /usr/lib/$kernel ] && ln -sf /etc/flash-kernel/dtb/*.dtb /usr/lib/$kernel/
+	cp -a $SCRIPT_ROOT/flash-kernel/db.linkstation /etc/flash-kernel/
+	echo $MACHINE_ID > /etc/flash-kernel/machine
+	(cd /etc/flash-kernel/; mv db db.orig; ln -sf db.linkstation db)
+fi
 apt-get clean
 
 if [ -f /etc/inittab ]; then
@@ -159,7 +183,6 @@ EOT
 
 mkdir -p /root/bin
 cp -a $SCRIPT_ROOT/scripts/*.sh /root/bin
-cp -a $SCRIPT_ROOT/dtb /boot/
 cp -a $SCRIPT_ROOT/scripts/initramfs-tools_hooks_set_root /etc/initramfs-tools/hooks/set_root
 cat << EOT >> /etc/initramfs-tools/hooks/set_root
 #echo "ROOT=/dev/disk/by-uuid/$(GetUUID $TARGET_DEV)" >> \$DESTDIR/conf/param.conf
@@ -171,13 +194,21 @@ echo "exit 0" >> /etc/initramfs-tools/hooks/set_root
 
 (cd /boot; [ -f initrd.buffalo -a ! -h initrd.buffalo ] && mv initrd.buffalo initrd.buffalo_orig;
 [ -f uImage.buffalo -a ! -h uImage.buffalo ] && mv uImage.buffalo uImage.buffalo_orig)
-if [ $STOCK_KERNEL -eq 0 ]; then
+ls -l /boot/uImage.buffalo /boot/initrd.buffalo
+if [ $BUFFALO_KERNEL -eq 0 ]; then
 	update-initramfs -uk all
-	/root/bin/kernel.sh 1
+	if [ -e /boot/uImage.flash-kernel ]; then
+		(cd /boot/;
+		echo ln -sf uImage.flash-kernel uImage.buffalo;
+		ln -sf uImage.flash-kernel uImage.buffalo;
+		echo ln -sf initrd.flash-kernel initrd.buffalo;
+		ln -sf initrd.flash-kernel initrd.buffalo)
+	fi
 else
 	#CreateInitrd $INITRD_ROOT_DEV /boot/initrd.buffalo_debian_$(echo $INITRD_ROOT_DEV |cut -dx -f2) 1
 	CreateInitrd $TARGET_DEV /boot/initrd.buffalo_debian_$(basename $TARGET_DEV) 1
 fi
+ls -l /boot/uImage.buffalo /boot/initrd.buffalo
 
 umount /boot
 umount /dev/pts
@@ -227,12 +258,12 @@ fi
 echo tar $ARG $TAR
 tar $ARG $TAR)
 
-CreateFstab $STOCK_KERNEL
+CreateFstab $BUFFALO_KERNEL
 mount -o remount,rw /boot
 initrd_bak=initrd.buffalo_debian_tmp-`basename $MNT_DEV`
 (cd /boot; [ -f $initrd_bak ] && rm $initrd_bak;
 [ -f initrd.buffalo_debian ] && mv initrd.buffalo_debian $initrd_bak)
-[ $STOCK_KERNEL -eq 1 ] && CreateInitrd $TARGET_DEV /boot/initrd.buffalo_debian_$(basename $TARGET_DEV) 1
+[ $BUFFALO_KERNEL -eq 1 ] && CreateInitrd $TARGET_DEV /boot/initrd.buffalo_debian_$(basename $TARGET_DEV) 1
 mount -o remount,ro /boot
 
 fi

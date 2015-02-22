@@ -1,0 +1,2 @@
+copied from armel jessie system, after installed "cdebootstrap-static" package:
+	/usr/lib/cdebootstrap/cdebootstrap_0.6.4_armel.tar.gz

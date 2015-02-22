@@ -1,7 +1,7 @@
 #!/bin/sh
 
 ver=$(dpkg -l|grep linux-image-|grep ^ii|head -n1| cut -d" " -f3|sed s/linux-image-//)
-dtb=/boot/dtb/kirkwood-lswxl.dtb
+dtb=/etc/flash-kernel/dtb/kirkwood-lswxl.dtb
 
 echo "devio > /tmp/foo 'wl 0xe3a01c02,4' 'wl 0xe381100f,4'"
 devio > /tmp/foo 'wl 0xe3a01c02,4' 'wl 0xe381100f,4'

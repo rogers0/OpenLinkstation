@@ -1,7 +1,21 @@
 InitVal() {
+	BUFFALO_KERNEL=1
+	if [ -e /proc/buffalo/firmware ]; then
+		MACHINE_ID=$(grep PRODUCTNAME /proc/buffalo/firmware|cut -d= -f2|cut -d\( -f1)
+		case "$MACHINE_ID" in
+		"LS-WXL" | "LS-WSXL")
+			MACHINE_ID="Buffalo Linkstation LS-WXL/WSXL"
+			BUFFALO_KERNEL=0
+			;;
+		"LS-WVL" | "LS-VL")
+			MACHINE_ID="Buffalo Linkstation LS-WVL/VL"
+			BUFFALO_KERNEL=0
+			;;
+		esac
+	fi
 	[ -z "$RUN_ROOT" ] && RUN_ROOT=$TARGET_DEV
 	[ -z "$RUN_BOOT" ] && RUN_BOOT=$BOOT_DEV
-	echo "ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV BOOT_DEVICE=$BOOT_DEV / rootfs=$RUN_ROOT bootfs=$RUN_BOOT"
+	echo "ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV BOOT_DEVICE=$BOOT_DEV / rootfs=$RUN_ROOT bootfs=$RUN_BOOT BUFFALO_KERNEL='$BUFFALO_KERNEL MACHINE_ID=$MACHINE_ID'"
 }
 
 GetUUID() {

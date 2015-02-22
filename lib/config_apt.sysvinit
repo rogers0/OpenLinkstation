@@ -3,7 +3,8 @@
 if [ "x$DEBOOTSTRAP" = "xdebootstrap" ]; then
 	DEBOOTSTRAP_PATH=/pool/main/d/debootstrap
 	[ $DISTRO = "squeeze" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.26+squeeze1_all.deb
-	[ $DISTRO = "wheezy" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.48+deb7u1_all.deb
+	[ $DISTRO = "wheezy" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.48+deb7u2_all.deb
+	[ $DISTRO = "jessie" ] && DEBOOTSTRAP_DEB="debootstrap_1.0.64~bpo70+1_all.deb"
 	DEBOOTSTRAP_OPT=
 	DPKG_DEBOOTSTRAP_OPT=
 else
@@ -20,14 +21,12 @@ if [ $DISTRO = "squeeze" ]; then
 elif [ $DISTRO = "wheezy" ]; then
 	DEB_INCLUDE=${DEB_INCLUDE},u-boot-tools
 	DEB_EXCLUDE=aptitude-common
-	#DEB_BPO="initramfs-tools linux-image-kirkwood"
-	DEB_BPO="initramfs-tools linux-image-3.16-0.bpo.3-kirkwood"
-	APT_OPT="-o Acquire::Check-Valid-Until=false"
+	DEB_BPO="initramfs-tools linux-image-kirkwood"
+	#DEB_BPO="initramfs-tools linux-image-3.16-0.bpo.3-kirkwood"
+	#APT_OPT="-o Acquire::Check-Valid-Until=false"
 elif [ $DISTRO = "jessie" ]; then
 	DEB_INCLUDE=${DEB_INCLUDE},u-boot-tools
-	#DEB_ADD="linux-image-kirkwood sysvinit-core systemd-sysv- systemd-"
-	DEB_ADD="linux-image-3.16-3-kirkwood sysvinit-core systemd-sysv- systemd-"
-	APT_OPT="-o Acquire::Check-Valid-Until=false"
+	DEB_ADD="linux-image-kirkwood sysvinit-core systemd-sysv- systemd-"
 fi
 DEB_EXCLUDE=${DEB_EXCLUDE},aptitude,tasksel,tasksel-data,vim-tiny
-DEB_INCLUDE=${DEB_INCLUDE},ssh,vim-nox,locales,screen,less,hddtemp,smartmontools,rsync,file,dialog,busybox,devio,mtr-tiny,rsyslog
+DEB_INCLUDE=${DEB_INCLUDE},ssh,vim-nox,locales,screen,less,hddtemp,smartmontools,rsync,file,dialog,busybox,devio,mtr-tiny,rsyslog,ntpdate
