@@ -47,8 +47,10 @@ else
 fi
 if [ $DISTRO = "jessie" ]; then
 	# dirty hack for Jessie. because there's no xz uncompression support on linkstation, but Jessie's deb is packed by xz
+	arch=$(dpkg --print-architecture)
+	[ "x$arch" = "xarm" ] && arch="armel"
 	mkdir /tmp/cdebootstrap; cd $_
-	tar xfz $SCRIPT_ROOT/bin/cdebootstrap*.tar.gz
+	tar xfz $SCRIPT_ROOT/lib/cdebootstrap*_${arch}.tar.gz
 	DEBOOTSTRAP=./cdebootstrap
 else
 	wget -nv -O /tmp/$DEBOOTSTRAP_DEB $MIRROR$DEBOOTSTRAP_PATH/$DEBOOTSTRAP_DEB
@@ -77,7 +79,9 @@ deb $MIRROR ${DISTRO}-updates main contrib non-free
 deb $MIRROR ${DISTRO}-backports main contrib non-free
 deb http://security.debian.org $DISTRO/updates main contrib non-free
 EOT
-CreateFstab $BUFFALO_KERNEL
+noUUID=0
+[ $BUFFALO_KERNEL -gt 0 -o ! -d /dev/disk/by-uuid ] && noUUID=1
+CreateFstab $noUUID
 cat << EOT > $TARGET/etc/network/interfaces
 auto lo
 iface lo inet loopback

@@ -10,7 +10,6 @@ if [ "x$DEBOOTSTRAP" = "xdebootstrap" ]; then
 else
 	DEBOOTSTRAP_PATH=/pool/main/c/cdebootstrap
 	[ $DISTRO = "wheezy" ] && DEBOOTSTRAP_DEB=cdebootstrap-static_0.5.9_armel.deb
-	[ $DISTRO = "jessie" ] && DEBOOTSTRAP_DEB=cdebootstrap-static_0.6.4_armel.deb
 	DEBOOTSTRAP_OPT="--flavour=minimal --allow-unauthenticated"
 	DPKG_DEBOOTSTRAP_OPT="--force-architecture --force-depends"
 	DEB_INCLUDE=netbase,ifupdown,net-tools,isc-dhcp-client,wget,udev,apt-utils,cron,iptables,logrotate,whiptail
