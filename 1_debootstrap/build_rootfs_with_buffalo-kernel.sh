@@ -79,8 +79,6 @@ deb $MIRROR ${DISTRO}-updates main contrib non-free
 deb $MIRROR ${DISTRO}-backports main contrib non-free
 deb http://security.debian.org $DISTRO/updates main contrib non-free
 EOT
-noUUID=0
-[ $BUFFALO_KERNEL -gt 0 -o ! -d /dev/disk/by-uuid ] && noUUID=1
 CreateFstab $noUUID
 cat << EOT > $TARGET/etc/network/interfaces
 auto lo
@@ -90,6 +88,15 @@ iface eth0 inet dhcp
 #auto eth1
 #iface eth1 inet dhcp
 EOT
+if [ -n "$MACHINE_ID" ]; then
+	mkdir -p $TARGET/etc/flash-kernel/
+	cd $_;
+	cp -a $SCRIPT_ROOT/dtb .
+	cp -a $SCRIPT_ROOT/flash-kernel/db.linkstation .
+	ln -sf db.linkstation db
+	echo $MACHINE_ID > machine
+	cd -
+fi
 
 #dd if=/boot/initrd.buffalo of=$TARGET/tmp/initrd.gz ibs=64 skip=1
 cp -a $SRC_ROOT $TARGET
@@ -126,7 +133,12 @@ echo -e ${ROOTPW}\\n${ROOTPW}\\n|passwd
 [ $DISTRO = "jessie" ] && sed -i '/PermitRootLogin/s/without-password/yes/' /etc/ssh/sshd_config
 echo '/dev/mtd2 0x00000 0x10000 0x10000' >> /etc/fw_env.config
 #sed -i 's/exit 0/rmmod ehci_orion ehci_hcd usbcore usb_common md_mod\nrmmod hmac sha1_generic sha1_arm mv_cesa\nrmmod netconsole configfs\n\n&/' /etc/rc.local
-echo "PATH=\$PATH:~/bin" >> /root/.bashrc
+cat << EOT >> /root/.bashrc
+PATH=\$PATH:~/bin
+alias du='du -h --max-depth=1'
+alias auu='apt-get update && apt-get upgrade && apt-get clean'
+EOT
+
 if [ $DISTRO = "squeeze" ]; then
 sed -i 's/^UTC=yes/UTC=no/' /etc/default/rcS
 elif [ $DISTRO = "wheezy" ]; then
@@ -149,11 +161,7 @@ fi
 [ -n "$DEB_ADD" ] && apt-get install -y --no-install-recommends $DEB_ADD
 if [ -n "$MACHINE_ID" ]; then
 	kernel=$(dpkg -l |grep linux-image|head -n1|cut -d" " -f3)
-	cp -a $SCRIPT_ROOT/dtb /etc/flash-kernel/
 	[ -n "$kernel" -a -d /usr/lib/$kernel ] && ln -sf /etc/flash-kernel/dtb/*.dtb /usr/lib/$kernel/
-	cp -a $SCRIPT_ROOT/flash-kernel/db.linkstation /etc/flash-kernel/
-	echo $MACHINE_ID > /etc/flash-kernel/machine
-	(cd /etc/flash-kernel/; mv db db.orig; ln -sf db.linkstation db)
 fi
 apt-get clean
 
@@ -188,10 +196,17 @@ EOT
 mkdir -p /root/bin
 cp -a $SCRIPT_ROOT/scripts/*.sh /root/bin
 cp -a $SCRIPT_ROOT/scripts/initramfs-tools_hooks_set_root /etc/initramfs-tools/hooks/set_root
+if [ $noUUID -gt 0 ]; then
 cat << EOT >> /etc/initramfs-tools/hooks/set_root
 #echo "ROOT=/dev/disk/by-uuid/$(GetUUID $TARGET_DEV)" >> \$DESTDIR/conf/param.conf
 echo "ROOT=$RUN_ROOT" >> \$DESTDIR/conf/param.conf
 EOT
+else
+cat << EOT >> /etc/initramfs-tools/hooks/set_root
+#echo "ROOT=$RUN_ROOT" >> \$DESTDIR/conf/param.conf
+echo "ROOT=/dev/disk/by-uuid/$(GetUUID $TARGET_DEV)" >> \$DESTDIR/conf/param.conf
+EOT
+fi
 [ $(GetFS $TARGET_DEV) = "xfs" -o $(GetFS $TARGET_DEV) = "jfs" -o $(GetFS $TARGET_DEV) = "ext4" ] && echo "#echo \"ROOTFLAGS='-o discard'\" >> \$DESTDIR/conf/param.conf" >> /etc/initramfs-tools/hooks/set_root
 [ $(GetFS $TARGET_DEV) = "btrfs" ] && echo "#echo \"ROOTFLAGS='-o ssd'\" >> \$DESTDIR/conf/param.conf" >> /etc/initramfs-tools/hooks/set_root
 echo "exit 0" >> /etc/initramfs-tools/hooks/set_root

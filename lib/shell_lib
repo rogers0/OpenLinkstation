@@ -1,6 +1,9 @@
 InitVal() {
 	BUFFALO_KERNEL=1
-	if [ -e /proc/buffalo/firmware ]; then
+	if [ -e /etc/flash-kernel/machine ]; then
+		MACHINE_ID=$(head -n1 /etc/flash-kernel/machine)
+		BUFFALO_KERNEL=0
+	elif [ -e /proc/buffalo/firmware ]; then
 		MACHINE_ID=$(grep PRODUCTNAME /proc/buffalo/firmware|cut -d= -f2|cut -d\( -f1)
 		case "$MACHINE_ID" in
 		"LS-WXL" | "LS-WSXL")
@@ -13,6 +16,8 @@ InitVal() {
 			;;
 		esac
 	fi
+	noUUID=0
+	[ $BUFFALO_KERNEL -gt 0 -o ! -d /dev/disk/by-uuid ] && noUUID=1
 	[ -z "$RUN_ROOT" ] && RUN_ROOT=$TARGET_DEV
 	[ -z "$RUN_BOOT" ] && RUN_BOOT=$BOOT_DEV
 	echo "ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV BOOT_DEVICE=$BOOT_DEV rootfs=$RUN_ROOT bootfs=$RUN_BOOT BUFFALO_KERNEL=$BUFFALO_KERNEL MACHINE_ID='$MACHINE_ID'"
