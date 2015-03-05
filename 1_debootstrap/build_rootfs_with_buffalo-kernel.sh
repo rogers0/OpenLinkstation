@@ -14,17 +14,26 @@
 
 SCRIPT_ROOT=$(readlink -f $(dirname $0))
 SRC_ROOT=$(readlink -f $(dirname $0)/..)
+[ -z "$1" ] && STAGE=0
+[ "x$1" = "xchrooted" ] && STAGE=1
+[ "x$1" = "xdebian" ] && STAGE=2
 
-. $SCRIPT_ROOT/config
-. $SRC_ROOT/lib/config_apt
+. $SRC_ROOT/lib/config
+. $SRC_ROOT/lib/config_local
 . $SRC_ROOT/lib/shell_lib
 
-if [ -z "$1" ]; then
+if [ $STAGE -eq 0 ]; then
 
 echo Start datetime: `date`
 echo 1st stage: debootstrap
 
 InitVal
+
+if [ -z "$TARGET_DEV" ]; then
+	echo Error: no TARGET_DEV is specified.
+	echo Please mount the device your want to create rootfs on \"/mnt\".
+	exit 1
+fi
 
 mkdir -p $TARGET/etc/default/ $TARGET/etc/apt/ $TARGET/etc/ssh/ $TARGET/lib/modules/
 echo $NEWHOST > $TARGET/etc/hostname
@@ -57,10 +66,6 @@ else
 	dpkg -i $DPKG_DEBOOTSTRAP_OPT /tmp/$DEBOOTSTRAP_DEB
 	rm /tmp/$DEBOOTSTRAP_DEB
 fi
-
-[ $ARRAY -eq 1 ] && DEB_INCLUDE=${DEB_INCLUDE},mdadm
-[ $(GetFS $TARGET_DEV) = "xfs" ] && DEB_INCLUDE=${DEB_INCLUDE},xfsprogs
-[ $(GetFS $TARGET_DEV) = "jfs" ] && DEB_INCLUDE=${DEB_INCLUDE},jfsutils
 
 echo $DEBOOTSTRAP --arch=armel $DEBOOTSTRAP_OPT --exclude=$DEB_EXCLUDE --include=$DEB_INCLUDE $DISTRO $TARGET $MIRROR
 $DEBOOTSTRAP --arch=armel $DEBOOTSTRAP_OPT --exclude=$DEB_EXCLUDE --include=$DEB_INCLUDE $DISTRO $TARGET $MIRROR
@@ -95,17 +100,21 @@ if [ -n "$MACHINE_ID" ]; then
 	cp -a $SCRIPT_ROOT/flash-kernel/db.linkstation .
 	ln -sf db.linkstation db
 	echo $MACHINE_ID > machine
+	echo $DEB_KERNEL > kernel-image
 	cd -
 fi
+echo $TARGET_DEV > $TARGET/target_dev
 
 #dd if=/boot/initrd.buffalo of=$TARGET/tmp/initrd.gz ibs=64 skip=1
 cp -a $SRC_ROOT $TARGET
 echo Chroot datetime: `date`
-mount --bind /dev $TARGET/dev
-echo LANG=C chroot $TARGET /$(basename $SRC_ROOT)/$(basename $SCRIPT_ROOT)/$(basename $0) chrooted $ARRAY
-LANG=C chroot $TARGET /$(basename $SRC_ROOT)/$(basename $SCRIPT_ROOT)/$(basename $0) chrooted $ARRAY
-[ $? -gt 0 ] && exit 0
-umount $TARGET/dev
+ChrootPrepare $TARGET $BOOT_DEV
+LANG=C chroot $TARGET df -h
+echo LANG=C chroot $TARGET /$(basename $SRC_ROOT)/$(basename $SCRIPT_ROOT)/$(basename $0) chrooted
+LANG=C chroot $TARGET /$(basename $SRC_ROOT)/$(basename $SCRIPT_ROOT)/$(basename $0) chrooted
+RET=$?
+ChrootEnd $TARGET
+[ $RET -gt 0 ] && exit 0
 cd $TARGET
 echo tar cf ../rootfs.tar .
 tar cf ../rootfs.tar .
@@ -115,22 +124,16 @@ mv $TARGET/* `readlink -f $TARGET/..`/
 rmdir $TARGET
 echo End datetime: `date`
 
-elif [ "$1" = "chrooted" ]; then
+elif [ $STAGE -eq 1 ]; then
 
 echo 2nd stage: CHROOT: build initrd image to boot from temp device
 
-mount -t proc proc /proc
 #(cd /dev/; [ -d .udev ] && mv .udev .oldudev; MAKEDEV sd{a,b,c,d} md; [ -d .oldudev ] && mv .oldudev .udev)
-mount -t sysfs sysfs /sys
-mount -t devpts devpts /dev/pts
-mount $BOOT_DEV /boot || (mount -o ro $BOOT_DEV /boot; mount -o remount,rw /boot)
-echo df -h; df -h
 
 InitVal
 
 echo "echo -e ${ROOTPW}\\n${ROOTPW}\\n|passwd"
 echo -e ${ROOTPW}\\n${ROOTPW}\\n|passwd
-[ $DISTRO = "jessie" ] && sed -i '/PermitRootLogin/s/without-password/yes/' /etc/ssh/sshd_config
 echo '/dev/mtd2 0x00000 0x10000 0x10000' >> /etc/fw_env.config
 #sed -i 's/exit 0/rmmod ehci_orion ehci_hcd usbcore usb_common md_mod\nrmmod hmac sha1_generic sha1_arm mv_cesa\nrmmod netconsole configfs\n\n&/' /etc/rc.local
 cat << EOT >> /root/.bashrc
@@ -145,26 +148,29 @@ elif [ $DISTRO = "wheezy" ]; then
 echo -e "0.0 0 0.0\n0\nLOCAL" > /etc/adjtime
 fi
 sed -i 's/^#FSCKFIX=no/&\nFSCKFIX=yes/' /etc/default/rcS
-[ "x$DEBOOTSTRAP" = "xcdebootstrap-static" ] && dpkg -r cdebootstrap-helper-rc.d
 echo 'Acquire::CompressionTypes::Order { "gz"; "bzip2"; "lzma"; };' >> /etc/apt/apt.conf.d/80-roger.conf
 apt-get $APT_OPT update
-apt-get dist-upgrade -y
+[ $ARRAY -eq 1 ] && DEB_ADD="$DEB_ADD mdadm"
+[ $(GetFS $TARGET_DEV) = "xfs" ] && DEB_ADD="$DEB_ADD xfsprogs"
+[ $(GetFS $TARGET_DEV) = "jfs" ] && DEB_ADD="$DEB_ADD jfsutils"
 if [ $(GetFS $TARGET_DEV) = "btrfs" ]; then
 	[ $DISTRO = "wheezy" ] && DEB_BPO="${DEB_BPO} btrfs-tools"
 	[ $DISTRO = "jessie" ] && DEB_ADD="${DEB_ADD} btrfs-tools"
 fi
 if [ -n "$MACHINE_ID" ]; then
-	[ $DISTRO = "wheezy" ] && DEB_BPO="${DEB_BPO} flash-kernel"
-	[ $DISTRO = "jessie" ] && DEB_ADD="${DEB_ADD} flash-kernel"
+	[ $DISTRO = "wheezy" ] && DEB_BPO="${DEB_BPO} flash-kernel $DEB_KERNEL"
+	[ $DISTRO = "jessie" ] && DEB_ADD="${DEB_ADD} flash-kernel $DEB_KERNEL"
 fi
 [ -n "$DEB_BPO" ] && apt-get install -y --no-install-recommends -t ${DISTRO}-backports $DEB_BPO
 [ -n "$DEB_ADD" ] && apt-get install -y --no-install-recommends $DEB_ADD
 if [ -n "$MACHINE_ID" ]; then
 	kernel=$(dpkg -l |grep linux-image|head -n1|cut -d" " -f3)
 	[ -n "$kernel" -a -d /usr/lib/$kernel ] && ln -sf /etc/flash-kernel/dtb/*.dtb /usr/lib/$kernel/
+	rm -f /etc/flash-kernel/kernel-image
 fi
-apt-get clean
+rm -f /target_dev
 
+[ $DISTRO = "jessie" ] && sed -i '/PermitRootLogin/s/without-password/yes/' /etc/ssh/sshd_config
 if [ -f /etc/inittab ]; then
 	sed -i 's/^1:2345:respawn:/#1:2345:respawn:/' /etc/inittab
 	sed -i 's/^2:23:respawn:/#2:23:respawn:/' /etc/inittab
@@ -182,40 +188,19 @@ sed -i 's:for x in \$(cat /proc/cmdline):& Debug:' /usr/share/initramfs-tools/in
 sed -i 's/^MODULES=most/MODULES=list/' /etc/initramfs-tools/initramfs.conf
 sed -i 's/^BUSYBOX=y/BUSYBOX=n/' /etc/initramfs-tools/initramfs.conf
 
-cat << EOT >> /etc/initramfs-tools/modules
-mv643xx_eth
-netconsole netconsole=@192.168.11.150/,6666@192.168.11.1/
-mvmdio
-sata_mv
-sd_mod
-$(GetFS $TARGET_DEV)
-EOT
-[ $ARRAY -eq 1 ] && echo raid1 >> /etc/initramfs-tools/modules
-[ "x$(GetFS $TARGET_DEV)" = "xbtrfs" ] && echo crc32c >> /etc/initramfs-tools/modules
-
 mkdir -p /root/bin
 cp -a $SCRIPT_ROOT/scripts/*.sh /root/bin
-cp -a $SCRIPT_ROOT/scripts/initramfs-tools_hooks_set_root /etc/initramfs-tools/hooks/set_root
-if [ $noUUID -gt 0 ]; then
-cat << EOT >> /etc/initramfs-tools/hooks/set_root
-#echo "ROOT=/dev/disk/by-uuid/$(GetUUID $TARGET_DEV)" >> \$DESTDIR/conf/param.conf
-echo "ROOT=$RUN_ROOT" >> \$DESTDIR/conf/param.conf
-EOT
-else
-cat << EOT >> /etc/initramfs-tools/hooks/set_root
-#echo "ROOT=$RUN_ROOT" >> \$DESTDIR/conf/param.conf
-echo "ROOT=/dev/disk/by-uuid/$(GetUUID $TARGET_DEV)" >> \$DESTDIR/conf/param.conf
-EOT
-fi
-[ $(GetFS $TARGET_DEV) = "xfs" -o $(GetFS $TARGET_DEV) = "jfs" -o $(GetFS $TARGET_DEV) = "ext4" ] && echo "#echo \"ROOTFLAGS='-o discard'\" >> \$DESTDIR/conf/param.conf" >> /etc/initramfs-tools/hooks/set_root
-[ $(GetFS $TARGET_DEV) = "btrfs" ] && echo "#echo \"ROOTFLAGS='-o ssd'\" >> \$DESTDIR/conf/param.conf" >> /etc/initramfs-tools/hooks/set_root
-echo "exit 0" >> /etc/initramfs-tools/hooks/set_root
+CreateInitramfsModule "" $TARGET_DEV $ARRAY
+CreateInitramfsHook $SCRIPT_ROOT "" $TARGET_DEV $RUN_ROOT $noUUID
+apt-get dist-upgrade -y
+[ -n "$DEB_DEL" ] && apt-get purge -y $DEB_DEL
+apt-get clean
 
 (cd /boot; [ -f initrd.buffalo -a ! -h initrd.buffalo ] && mv initrd.buffalo initrd.buffalo_orig;
 [ -f uImage.buffalo -a ! -h uImage.buffalo ] && mv uImage.buffalo uImage.buffalo_orig)
 ls -l /boot/uImage.buffalo /boot/initrd.buffalo
 if [ $BUFFALO_KERNEL -eq 0 ]; then
-	update-initramfs -uk all
+	#update-initramfs -uk all
 	if [ -e /boot/uImage.flash-kernel ]; then
 		(cd /boot/;
 		echo ln -sf uImage.flash-kernel uImage.buffalo;
@@ -229,30 +214,11 @@ else
 fi
 ls -l /boot/uImage.buffalo /boot/initrd.buffalo
 
-umount /boot
-umount /dev/pts
-umount /sys
-umount /proc
-
-elif [ "$1" = "debian" ]; then
+elif [ $STAGE -eq 2 ]; then
 
 echo 3rd stage: Build Debian rootfs on final target device
 
 InitVal
-
-TARGET=/mnt
-TARGET_DEV=/dev/sda2
-MNT_DEV=/dev/sda6
-if [ $ARRAY -eq 1 ]; then
-TARGET_DEV=/dev/md1
-if [ -e /dev/md21 ]; then
-MNT_DEV=/dev/md21
-else
-MNT_DEV=/dev/md2
-fi
-fi
-
-echo ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV
 
 if [ -f /rootfs.tar ]; then
 	ARG=xf;  TAR=/rootfs.tar
@@ -264,25 +230,37 @@ elif [ -f /rootfs.tar.xz ]; then
 	ARG=xfJ; TAR=/rootfs.tar.xz
 else
 	echo cannot find rootfs tarball.
-	exit
+	exit 1
 fi
 
 (cd $TARGET
-if [ ! -d stock_rootfs_backup ]; then
-	echo mkdir stock_rootfs_backup
-	mkdir stock_rootfs_backup
-	echo mv .\* \* stock_rootfs_backup/
-	mv .* * stock_rootfs_backup/
+old_fs_backup="old_fs_backup"
+if [ ! -d $old_fs_backup ]; then
+	echo mkdir $old_fs_backup
+	mkdir $old_fs_backup
+	echo mv .\* \* $old_fs_backup/
+	mv .* * $old_fs_backup/
 fi
 echo tar $ARG $TAR
 tar $ARG $TAR)
 
-CreateFstab $BUFFALO_KERNEL
-mount -o remount,rw /boot
-initrd_bak=initrd.buffalo_debian_tmp-`basename $MNT_DEV`
-(cd /boot; [ -f $initrd_bak ] && rm $initrd_bak;
-[ -f initrd.buffalo_debian ] && mv initrd.buffalo_debian $initrd_bak)
-[ $BUFFALO_KERNEL -eq 1 ] && CreateInitrd $TARGET_DEV /boot/initrd.buffalo_debian_$(basename $TARGET_DEV) 1
+CreateFstab $noUUID
+if [ $BUFFALO_KERNEL -eq 0 ]; then
+	ChrootPrepare $TARGET $BOOT_DEV
+	chroot $TARGET df -h
+	CreateInitramfsHook $SCRIPT_ROOT $TARGET $TARGET_DEV $RUN_ROOT $noUUID
+	#CreateInitramfsModule $TARGET $TARGET_DEV $ARRAY
+	echo $(GetFS $TARGET_DEV) >> $TARGET//etc/initramfs-tools/modules
+	[ "x$(GetFS $TARGET_DEV)" = "xbtrfs" ] && echo crc32c >> $TARGET/etc/initramfs-tools/modules
+	chroot $TARGET update-initramfs -utk all
+	ChrootEnd $TARGET
+else
+	mount -o remount,rw /boot
+	initrd_bak=initrd.buffalo_debian_tmp-`basename $MNT_DEV`
+	(cd /boot; [ -f $initrd_bak ] && rm $initrd_bak;
+	[ -f initrd.buffalo_debian ] && mv initrd.buffalo_debian $initrd_bak)
+	[ $BUFFALO_KERNEL -eq 1 ] && CreateInitrd $TARGET_DEV /boot/initrd.buffalo_debian_$(basename $TARGET_DEV) 1
+fi
 mount -o remount,ro /boot
 
 fi

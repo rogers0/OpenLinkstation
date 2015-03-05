@@ -1,26 +1,85 @@
 InitVal() {
 	BUFFALO_KERNEL=1
-	if [ -e /etc/flash-kernel/machine ]; then
-		MACHINE_ID=$(head -n1 /etc/flash-kernel/machine)
-		BUFFALO_KERNEL=0
-	elif [ -e /proc/buffalo/firmware ]; then
+	ARRAY=0 # condition intended to be so complex due to fit various cases: 1st run / 2nd run in chroot w/ or w/o RAID
+	[ -e /proc/mdstat ] && [ `wc -l /proc/mdstat | awk '{print $1}'` -gt 2 ] && ARRAY=1
+
+	if [ $STAGE -eq 0 -a -e /proc/buffalo/firmware ]; then
 		MACHINE_ID=$(grep PRODUCTNAME /proc/buffalo/firmware|cut -d= -f2|cut -d\( -f1)
 		case "$MACHINE_ID" in
 		"LS-WXL" | "LS-WSXL")
 			MACHINE_ID="Buffalo Linkstation LS-WXL/WSXL"
 			BUFFALO_KERNEL=0
+			DEB_KERNEL="linux-image-kirkwood"
 			;;
 		"LS-WVL" | "LS-VL")
 			MACHINE_ID="Buffalo Linkstation LS-WVL/VL"
 			BUFFALO_KERNEL=0
+			DEB_KERNEL="linux-image-kirkwood"
 			;;
 		esac
+	elif [ $STAGE -eq 0 ]; then
+		MACHINE_ID=$(dmesg|grep "Machine model"|cut -d: -f2|sed -e 's/^[[:space:]]*//')
+		BUFFALO_KERNEL=0
+		DEB_KERNEL=$(dpkg -l |grep linux-image|tail -n1|cut -d" " -f3)
+	elif [ $STAGE -eq 1 -a -e /etc/flash-kernel/machine ]; then
+		MACHINE_ID=$(head -n1 /etc/flash-kernel/machine)
+		BUFFALO_KERNEL=0
+		DEB_KERNEL=$(head -n1 /etc/flash-kernel/kernel-image)
+	elif [ $STAGE -eq 2 -a -e /etc/flash-kernel/machine ]; then
+		MACHINE_ID=$(head -n1 /etc/flash-kernel/machine)
+		BUFFALO_KERNEL=0
+	else
+		echo Unexpected situation ... case 0
+		exit 1
+	fi
+	SWAP_DEV=/dev/null
+	BOOT_DEV=/dev/md0
+	[ $ARRAY -eq 0 ] && BOOT_DEV=/dev/sda1
+	if [ $STAGE -eq 0 ]; then
+		if [ $ARRAY -eq 0 ]; then
+			if [ -d /mnt/disk1 -o -d /mnt/disk2 ]; then
+				TARGET=/mnt/disk1/rootfs
+				[ -d /mnt/disk2 ] && TARGET=/mnt/disk2/rootfs
+				TARGET_DEV=/dev/sda6
+			fi
+			MNT_DEV=/dev/sda2
+		else
+			if [ -d /mnt/array1 -o -d /mnt/array2 ]; then
+				TARGET=/mnt/array1/rootfs
+				[ -d /mnt/array2 ] && TARGET=/mnt/array2/rootfs
+				if [ -e /dev/md2 ]; then
+					TARGET_DEV=/dev/md2
+				elif [ -e /dev/md21 ]; then
+					TARGET_DEV=/dev/md21
+				elif [ -e /dev/md22 ]; then
+					TARGET_DEV=/dev/md22
+				fi
+				MNT_DEV=/dev/md1
+			else
+				MNT_DEV=/dev/md2
+			fi
+		fi
+		if [ -z "$TARGET" ]; then
+			TARGET=/mnt/rootfs
+			TARGET_DEV=$(GetDev "/mnt")
+		fi
+	elif [ $STAGE -eq 1 ]; then
+		TARGET_DEV=$(head -n1 /target_dev)
+	elif [ $STAGE -eq 2 ]; then
+		TARGET=/mnt
+		TARGET_DEV=$(GetDev $TARGET)
+		MNT_DEV=$(GetDev /)
+		[ -z "$TARGET_DEV" ] && echo Please mount target rootfs device on /mnt. && exit 1
+	else
+		echo Unexpected situation ... case 1
+		exit 1
 	fi
 	noUUID=0
-	[ $BUFFALO_KERNEL -gt 0 -o ! -d /dev/disk/by-uuid ] && noUUID=1
+	[ $BUFFALO_KERNEL -gt 0 -o ! -d /dev/disk/by-uuid -o $STAGE -eq 2 ] && noUUID=1
 	[ -z "$RUN_ROOT" ] && RUN_ROOT=$TARGET_DEV
 	[ -z "$RUN_BOOT" ] && RUN_BOOT=$BOOT_DEV
-	echo "ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV BOOT_DEVICE=$BOOT_DEV rootfs=$RUN_ROOT bootfs=$RUN_BOOT BUFFALO_KERNEL=$BUFFALO_KERNEL MACHINE_ID='$MACHINE_ID'"
+	echo "STAGE=$STAGE ARRAY=$ARRAY TARGET=$TARGET TARGET_DEVICE=$TARGET_DEV BOOT_DEVICE=$BOOT_DEV rootfs=$RUN_ROOT bootfs=$RUN_BOOT"
+	echo "BUFFALO_KERNEL=$BUFFALO_KERNEL MACHINE_ID='$MACHINE_ID' DEB_KERNEL=$DEB_KERNEL"
 }
 
 GetUUID() {
@@ -29,6 +88,12 @@ GetUUID() {
 
 GetFS() {
 	echo $(blkid -o value -s TYPE $1)
+}
+
+GetDev() {
+	dev=$(readlink -f $1)
+	line=$(cut -d' ' -f2 /proc/mounts|grep -n "^$dev\$"|tail -n1|cut -d: -f1)
+	[ -n "$line" ] && echo $(sed -n -e ${line}p /proc/mounts|cut -d' ' -f1)
 }
 
 # Create file /etc/fstab
@@ -178,4 +243,85 @@ EOT
 		echo ls -l /boot/initrd.buffalo\*
 		ls -l /boot/initrd.buffalo*)
 	fi
+}
+
+# Create hook script for initramfs
+# Argument:
+#	$1: scripts root path
+#	$2: target rootfs path
+#	$3: boot device on runtime
+#	$4: boot device when boot the new created system
+#	$5: whether NOT to use UUID in initramfs
+CreateInitramfsHook() {
+	script_root=$1
+	rootfs=$2
+	fstype=$(GetFS $3)
+	uuid=$(GetUUID $3)
+	rootdev=$4
+	no_uuid=$5
+	if [ -f $script_root/scripts/initramfs-tools_hooks_set_root ]; then
+		echo cp -a $script_root/scripts/initramfs-tools_hooks_set_root $rootfs/etc/initramfs-tools/hooks/set_root
+		cp -a $script_root/scripts/initramfs-tools_hooks_set_root $rootfs/etc/initramfs-tools/hooks/set_root
+		if [ $no_uuid -gt 0 ]; then
+			cat << EOT >> $rootfs/etc/initramfs-tools/hooks/set_root
+#echo "ROOT=/dev/disk/by-uuid/$uuid" >> \$DESTDIR/conf/param.conf
+echo "ROOT=$rootdev" >> \$DESTDIR/conf/param.conf
+EOT
+		else
+			cat << EOT >> $rootfs/etc/initramfs-tools/hooks/set_root
+#echo "ROOT=$rootdev" >> \$DESTDIR/conf/param.conf
+echo "ROOT=/dev/disk/by-uuid/$uuid" >> \$DESTDIR/conf/param.conf
+EOT
+		fi
+		[ $fstype = "xfs" -o $fstype = "jfs" -o $fstype = "ext4" ] && echo "#echo \"ROOTFLAGS='-o discard'\" >> \$DESTDIR/conf/param.conf" >> $rootfs/etc/initramfs-tools/hooks/set_root
+		[ $fstype = "btrfs" ] && echo "#echo \"ROOTFLAGS='-o ssd'\" >> \$DESTDIR/conf/param.conf" >> $rootfs/etc/initramfs-tools/hooks/set_root
+		echo "exit 0" >> $rootfs/etc/initramfs-tools/hooks/set_root
+	fi
+}
+
+# Create modules list for initramfs
+# Argument:
+#	$1: target rootfs path
+#	$2: boot device on runtime
+#	$3: whether is RAID1
+CreateInitramfsModule() {
+	rootfs=$1
+	fstype=$(GetFS $2)
+	array=$3
+	cat << EOT >> $rootfs/etc/initramfs-tools/modules
+mv643xx_eth
+netconsole netconsole=@192.168.11.150/,6666@192.168.11.1/
+mvmdio
+sata_mv
+sd_mod
+$fstype
+EOT
+	[ $array -eq 1 ] && echo raid1 >> $rootfs/etc/initramfs-tools/modules
+	[ "x$fstype" = "xbtrfs" ] && echo crc32c >> $rootfs/etc/initramfs-tools/modules
+}
+
+# Prepare to chroot
+# Argument:
+#	$1: target rootfs path
+#	$2: boot device
+ChrootPrepare() {
+	root=$1
+	boot_dev=$2
+	mount --bind /dev $root/dev
+	chroot $root mount -t proc proc /proc
+	chroot $root mount -t sysfs sysfs /sys
+	chroot $root mount -t devpts devpts /dev/pts
+	chroot $root mount $boot_dev /boot || (chroot $root mount -o ro $boot_dev /boot; chroot $root mount -o remount,rw /boot)
+}
+
+# Finish a chroot
+# Argument:
+#	$1: target rootfs path
+ChrootEnd() {
+	root=$1
+	chroot $root umount /boot
+	chroot $root umount /dev/pts
+	chroot $root umount /sys
+	chroot $root umount /proc
+	chroot $root umount /dev
 }
