@@ -44,17 +44,20 @@ InitVal() {
 			fi
 			MNT_DEV=/dev/sda2
 		else
+			if [ -e /dev/md2 ]; then
+				TARGET_DEV=/dev/md2
+			elif [ -e /dev/md21 ]; then
+				TARGET_DEV=/dev/md21
+			elif [ -e /dev/md22 ]; then
+				TARGET_DEV=/dev/md22
+			fi
+			MNT_DEV=/dev/md1
 			if [ -d /mnt/array1 -o -d /mnt/array2 ]; then
 				TARGET=/mnt/array1/rootfs
 				[ -d /mnt/array2 ] && TARGET=/mnt/array2/rootfs
-				if [ -e /dev/md2 ]; then
-					TARGET_DEV=/dev/md2
-				elif [ -e /dev/md21 ]; then
-					TARGET_DEV=/dev/md21
-				elif [ -e /dev/md22 ]; then
-					TARGET_DEV=/dev/md22
-				fi
-				MNT_DEV=/dev/md1
+			elif [ -d /mnt/disk1 -o -d /mnt/disk2 ]; then
+				TARGET=/mnt/disk1/rootfs
+				[ -d /mnt/disk2 ] && TARGET=/mnt/disk2/rootfs
 			else
 				MNT_DEV=/dev/md2
 			fi
@@ -260,7 +263,6 @@ CreateInitramfsHook() {
 	rootdev=$4
 	no_uuid=$5
 	if [ -f $script_root/scripts/initramfs-tools_hooks_set_root ]; then
-		echo cp -a $script_root/scripts/initramfs-tools_hooks_set_root $rootfs/etc/initramfs-tools/hooks/set_root
 		cp -a $script_root/scripts/initramfs-tools_hooks_set_root $rootfs/etc/initramfs-tools/hooks/set_root
 		if [ $no_uuid -gt 0 ]; then
 			cat << EOT >> $rootfs/etc/initramfs-tools/hooks/set_root
