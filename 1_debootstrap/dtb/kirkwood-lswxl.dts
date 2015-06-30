@@ -1,7 +1,7 @@
 /*
- * Device Tree file for Buffalo Linkstation Duo Pro (LS-WXL/WSXL)
+ * Device Tree file for Buffalo Linkstation LS-WXL/WSXL
  *
- * Copyright (C) 2015, roger@localet.com
+ * Copyright (C) 2015, rogershimizu@gmail.com
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -16,7 +16,7 @@
 
 / {
 	model = "Buffalo Linkstation LS-WXL/WSXL";
-	compatible = "buffalo,linkstation,lswxl", "buffalo,lswxl", "marvell,kirkwood-88f6281", "marvell,kirkwood";
+	compatible = "buffalo,lswxl", "marvell,kirkwood-88f6281", "marvell,kirkwood";
 
 	memory { /* 128 MB */
 		device_type = "memory";
@@ -71,7 +71,7 @@
 				marvell,pins = "mpp49";
 				marvell,function = "gpio";
 			};
-			pmx_led_function_red: pmx-led-function_red {
+			pmx_led_function_red: pmx-led-function-red {
 				marvell,pins = "mpp34";
 				marvell,function = "gpio";
 			};
@@ -106,8 +106,6 @@
 		};
 
 		serial@12000 {
-			pinctrl-0 = <&pmx_uart0>;
-			pinctrl-names = "default";
 			status = "okay";
 		};
 
@@ -122,7 +120,7 @@
 			m25p40@0 {
 				#address-cells = <1>;
 				#size-cells = <1>;
-				compatible = "m25p40";
+				compatible = "st,m25p40", "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <25000000>;
 				mode = <0>;
@@ -203,14 +201,12 @@
 		led@4 {
 			label = "lswxl:blue:power";
 			gpios = <&gpio1 8 GPIO_ACTIVE_LOW>;
-			default-state = "keep";
 		};
 
 		led@5 {
 			label = "lswxl:red:func";
 			gpios = <&gpio1 5 GPIO_ACTIVE_LOW>;
 			default-state = "keep";
-			linux,default-trigger = "heartbeat";
 		};
 
 		led@6 {
@@ -290,33 +286,16 @@
 &mdio {
 	status = "okay";
 
-	ethphy0: ethernet-phy@0 {
-		device_type = "ethernet-phy";
-		reg = <0>;
-	};
-
 	ethphy1: ethernet-phy@8 {
 		device_type = "ethernet-phy";
 		reg = <8>;
 	};
 };
 
-&eth0 {
-	status = "okay";
-	reg = <0x76000 0x4000>;
-	clocks = <&gate_clk 19>;
-	ethernet0-port@0 {
-		phy-handle = <&ethphy1>;
-		interrupts = <15>;
-	};
-};
-
 &eth1 {
-	status = "disabled";
-	reg = <0x72000 0x4000>;
-	clocks = <&gate_clk 0>;
+	status = "okay";
+
 	ethernet1-port@0 {
-		phy-handle = <&ethphy0>;
-		interrupts = <11>;
+		phy-handle = <&ethphy1>;
 	};
 };

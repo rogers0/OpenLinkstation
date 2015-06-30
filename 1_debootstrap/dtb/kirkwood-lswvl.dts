@@ -1,7 +1,7 @@
 /*
- * Device Tree file for Buffalo Linkstation LS-WVL/WSXL
+ * Device Tree file for Buffalo Linkstation LS-WVL/VL
  *
- * Copyright (C) 2015, roger@localet.com
+ * Copyright (C) 2015, rogershimizu@gmail.com
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -16,7 +16,7 @@
 
 / {
 	model = "Buffalo Linkstation LS-WVL/VL";
-	compatible = "buffalo,linkstation,lswvl", "buffalo,lswvl", "buffalo,linkstation,lsvl", "buffalo,lsvl", "marvell,kirkwood-88f6282", "marvell,kirkwood";
+	compatible = "buffalo,lswvl", "buffalo,lsvl", "marvell,kirkwood-88f6282", "marvell,kirkwood";
 
 	memory { /* 256 MB */
 		device_type = "memory";
@@ -71,7 +71,7 @@
 				marvell,pins = "mpp36";
 				marvell,function = "gpio";
 			};
-			pmx_led_function_red: pmx-led-function_red {
+			pmx_led_function_red: pmx-led-function-red {
 				marvell,pins = "mpp37";
 				marvell,function = "gpio";
 			};
@@ -103,16 +103,9 @@
 				marvell,pins = "mpp47";
 				marvell,function = "gpio";
 			};
-
-		};
-
-		i2c@11000 {
-			status = "okay";
 		};
 
 		serial@12000 {
-			pinctrl-0 = <&pmx_uart0>;
-			pinctrl-names = "default";
 			status = "okay";
 		};
 
@@ -127,7 +120,7 @@
 			m25p40@0 {
 				#address-cells = <1>;
 				#size-cells = <1>;
-				compatible = "m25p40";
+				compatible = "st,m25p40", "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <25000000>;
 				mode = <0>;
@@ -151,7 +144,6 @@
 			};
 		};
 	};
-
 
 	gpio_keys {
 		compatible = "gpio-keys";
@@ -219,12 +211,12 @@
 
 		led@6 {
 			label = "lswvl:red:hdderr0";
-			gpios = <&gpio0 34 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpio0 34 GPIO_ACTIVE_LOW>;
 		};
 
 		led@7 {
 			label = "lswvl:red:hdderr1";
-			gpios = <&gpio0 35 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpio0 35 GPIO_ACTIVE_LOW>;
 		};
 	};
 
@@ -264,7 +256,7 @@
 			enable-active-high;
 			regulator-always-on;
 			regulator-boot-on;
-			gpio = <&gpio0 12 GPIO_ACTIVE_LOW>;
+			gpio = <&gpio0 12 GPIO_ACTIVE_HIGH>;
 		};
 		hdd_power0: regulator@2 {
 			compatible = "regulator-fixed";
@@ -275,7 +267,7 @@
 			enable-active-high;
 			regulator-always-on;
 			regulator-boot-on;
-			gpio = <&gpio0 8 GPIO_ACTIVE_LOW>;
+			gpio = <&gpio0 8 GPIO_ACTIVE_HIGH>;
 		};
 		hdd_power1: regulator@3 {
 			compatible = "regulator-fixed";
@@ -286,13 +278,14 @@
 			enable-active-high;
 			regulator-always-on;
 			regulator-boot-on;
-			gpio = <&gpio0 9 GPIO_ACTIVE_LOW>;
+			gpio = <&gpio0 9 GPIO_ACTIVE_HIGH>;
 		};
 	};
 };
 
 &mdio {
 	status = "okay";
+
 	ethphy0: ethernet-phy@0 {
 		device_type = "ethernet-phy";
 		reg = <0>;
@@ -301,6 +294,7 @@
 
 &eth0 {
 	status = "okay";
+
 	ethernet0-port@0 {
 		phy-handle = <&ethphy0>;
 	};
