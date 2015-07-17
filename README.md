@@ -1,6 +1,16 @@
 OpenLinkstation
 ===============
 
+
+----
+NEWS
+----
+
+The DeviceTree (DTB) for Linkstation WXL/WVL used here is going to be merged into mainline Linux!
+
+	Latest status from ML: http://lists.infradead.org/pipermail/linux-arm-kernel/2015-July/357283.html
+
+
 ----
 Purpose
 ----
@@ -21,9 +31,10 @@ Step1, debootstrap to data partition (/dev/sda6 for one-disk version or /dev/md2
 	1_debootstrap/build_rootfs_with_buffalo-kernel.sh
 	reboot
 
-Step2, reboot into Debian system on data partition, then build the final rootfs on root partition. Run on Linkstation box:
+Step2, reboot into Debian system on data partition, then build the final rootfs on root partition. Please note the password for ssh login is just 'password'. After login, run on Linkstation box:
 
-	/build_rootfs_with_buffalo-kernel.sh debian
+	mount /dev/<root dev> /mnt
+	/linkstation/1_debootstrap/build_rootfs_with_buffalo-kernel.sh debian
 	reboot
 
 After a few minutes on booting, you should be able to log into your Linkstation with Debian installed. Clean up the stuff we don't need any more:
@@ -38,10 +49,11 @@ Status
 
 Confirmed to be working on the model/firmware below:
 
- - LS-VL 1.69 (Debian Wheezy-backport / Jessie kernel + own DTB)
- - LS-WXL 1.69 (Debian Wheezy-backport / Jessie kernel + own DTB)
- - LS-WSXL 1.69 (Debian Wheezy-backport / Jessie kernel + own DTB)
- - LS-WVL 1.69 (Debian Wheezy-backport / Jessie kernel + own DTB)
+ - LS-VL 1.68 ~ 1.70 (Debian Wheezy-backport / Jessie kernel + own DTB)
+ - LS-WXL 1.68 ~ 1.70 (Debian Wheezy-backport / Jessie kernel + own DTB)
+ - LS-WSXL 1.68 ~ 1.70 (Debian Wheezy-backport / Jessie kernel + own DTB)
+ - LS-WVL 1.68 ~ 1.70 (Debian Wheezy-backport / Jessie kernel + own DTB)
+ - LS-420 1.80 ~ 1.81 (step0, enable SSH only. still working on it)
 
 
 ----

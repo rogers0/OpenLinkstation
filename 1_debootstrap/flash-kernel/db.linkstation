@@ -1,25 +1,21 @@
 Machine: Buffalo Linkstation LS-WXL/WSXL
 Kernel-Flavors: kirkwood
-Machine-Id: 527
 DTB-Id: kirkwood-lswxl.dtb
 DTB-Append: yes
 U-Boot-Kernel-Address: 0x00008000
 U-Boot-Initrd-Address: 0x0
 Boot-Kernel-Path: /boot/uImage.flash-kernel
 Boot-Initrd-Path: /boot/initrd.flash-kernel
-Boot-DTB-Path: /boot/dtb
 Required-Packages: u-boot-tools
 Bootloader-Sets-Incorrect-Root: yes
 
 Machine: Buffalo Linkstation LS-WVL/VL
 Kernel-Flavors: kirkwood
-Machine-Id: 527
 DTB-Id: kirkwood-lswvl.dtb
 DTB-Append: yes
 U-Boot-Kernel-Address: 0x00008000
 U-Boot-Initrd-Address: 0x0
 Boot-Kernel-Path: /boot/uImage.flash-kernel
 Boot-Initrd-Path: /boot/initrd.flash-kernel
-Boot-DTB-Path: /boot/dtb
 Required-Packages: u-boot-tools
 Bootloader-Sets-Incorrect-Root: yes
