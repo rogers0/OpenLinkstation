@@ -6,7 +6,7 @@ OpenLinkstation
 NEWS
 ----
 
-The DeviceTree (DTB) for Linkstation WXL/WVL used here is going to be merged into mainline Linux!
+The DeviceTree (DTB) for Linkstation LS-WXL/LS-WSXL & LS-WVL/LS-VL used here is going to be merged into mainline Linux!
 
 	Latest status from ML: http://lists.infradead.org/pipermail/linux-arm-kernel/2015-July/357283.html
 
@@ -26,15 +26,16 @@ Step0, get SSH shell access. Run on your Linux PC:
 
 	0_get-ssh/get-ssh.sh <Linkstation IP> [Linkstation web login password]
 
-Step1, debootstrap to data partition (/dev/sda6 for one-disk version or /dev/md2 for RAID version). Run on Linkstation box:
+Step1, debootstrap to data partition (/dev/sda6 for one-disk version or /dev/md2 for RAID version). You can set debian distro, hostname, password in "lib/config". Run on Linkstation box:
 
+	vi lib/config
 	1_debootstrap/build_rootfs_with_buffalo-kernel.sh
 	reboot
 
-Step2, reboot into Debian system on data partition, then build the final rootfs on root partition. Please note the password for ssh login is just 'password'. After login, run on Linkstation box:
+Step2, reboot into Debian system on data partition, then build the final rootfs on root partition. Please note the password for ssh login is just 'password', if you didn't change it in previous step. After login, run on Linkstation box:
 
 	mount /dev/<root dev> /mnt
-	/linkstation/1_debootstrap/build_rootfs_with_buffalo-kernel.sh debian
+	linkstation/1_debootstrap/build_rootfs_with_buffalo-kernel.sh debian
 	reboot
 
 After a few minutes on booting, you should be able to log into your Linkstation with Debian installed. Clean up the stuff we don't need any more:
@@ -53,7 +54,7 @@ Confirmed to be working on the model/firmware below:
  - LS-WXL 1.68 ~ 1.70 (Debian Wheezy-backport / Jessie kernel + own DTB)
  - LS-WSXL 1.68 ~ 1.70 (Debian Wheezy-backport / Jessie kernel + own DTB)
  - LS-WVL 1.68 ~ 1.70 (Debian Wheezy-backport / Jessie kernel + own DTB)
- - LS-420 1.80 ~ 1.81 (step0, enable SSH only. still working on it)
+ - LS-420 1.80 ~ 1.81 (Debian Wheezy-backport / Buffalo kernel) (upgrade to Jessie is OK, but direct bootstrap to Jessie still has issue)
 
 
 ----

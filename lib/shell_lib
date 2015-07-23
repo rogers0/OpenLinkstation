@@ -1,5 +1,6 @@
 InitVal() {
-	BUFFALO_KERNEL=1
+	BUFFALO_KERNEL=0
+	DEB_ARCH=armel
 	ARRAY=0 # condition intended to be so complex due to fit various cases: 1st run / 2nd run in chroot w/ or w/o RAID
 	[ -e /proc/mdstat ] && [ `wc -l /proc/mdstat | awk '{print $1}'` -gt 2 ] && ARRAY=1
 
@@ -8,30 +9,80 @@ InitVal() {
 		case "$MACHINE_ID" in
 		"LS-WXL" | "LS-WSXL")
 			MACHINE_ID="Buffalo Linkstation LS-WXL/WSXL"
-			BUFFALO_KERNEL=0
 			DEB_KERNEL="linux-image-kirkwood"
 			;;
 		"LS-WVL" | "LS-VL")
 			MACHINE_ID="Buffalo Linkstation LS-WVL/VL"
-			BUFFALO_KERNEL=0
 			DEB_KERNEL="linux-image-kirkwood"
+			;;
+		"LS410D" | "LS420D" | "LS410DX" | "LS421D" | "LS210D" | "LS220D" | "LS220DB")
+			DEB_ARCH=armhf
+			MACHINE_ID="Buffalo Linkstation LS400/LS200"
+			#DEB_KERNEL="linux-image-armmp"
+			BUFFALO_KERNEL=1
+			;;
+		*)
+			MACHINE_ID=""
+			BUFFALO_KERNEL=1
 			;;
 		esac
 	elif [ $STAGE -eq 0 ]; then
 		MACHINE_ID=$(dmesg|grep "Machine model"|cut -d: -f2|sed -e 's/^[[:space:]]*//')
-		BUFFALO_KERNEL=0
 		DEB_KERNEL=$(dpkg -l |grep linux-image|tail -n1|cut -d" " -f3)
 	elif [ $STAGE -eq 1 -a -e /etc/flash-kernel/machine ]; then
 		MACHINE_ID=$(head -n1 /etc/flash-kernel/machine)
-		BUFFALO_KERNEL=0
 		DEB_KERNEL=$(head -n1 /etc/flash-kernel/kernel-image)
 	elif [ $STAGE -eq 2 -a -e /etc/flash-kernel/machine ]; then
 		MACHINE_ID=$(head -n1 /etc/flash-kernel/machine)
-		BUFFALO_KERNEL=0
-	else
+	elif [ $STAGE -eq 1 -o $STAGE -eq 2 ]; then
+		BUFFALO_KERNEL=1
+	elif [ ! $FORCE_BUFFALO_KERNEL -eq 1 ]; then
 		echo Unexpected situation ... case 0
 		exit 1
 	fi
+	if [ $FORCE_BUFFALO_KERNEL -eq 1 ]; then
+		MACHINE_ID=""
+		BUFFALO_KERNEL=1
+	fi
+
+	DEB_EXCLUDE=aptitude,tasksel,tasksel-data,vim-tiny
+	DEB_INCLUDE=whiptail
+	DEB_ADD="ssh vim-nox locales screen less hddtemp smartmontools rsync file mtr-tiny rsyslog ntpdate"
+	DEB_DEL=""
+
+	# package detail can be found on: https://packages.debian.org/squeeze/all/debootstrap/download
+	if [ "x$DEBOOTSTRAP" = "xdebootstrap" ]; then
+		DEBOOTSTRAP_PATH=/pool/main/d/debootstrap
+		[ $DISTRO = "squeeze" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.26+squeeze1_all.deb
+		[ $DISTRO = "wheezy" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.48+deb7u2_all.deb
+		[ $DISTRO = "jessie" ] && DEBOOTSTRAP_DEB="debootstrap_1.0.64~bpo70+1_all.deb"
+		DEBOOTSTRAP_OPT=
+		DPKG_DEBOOTSTRAP_OPT=
+	else
+		DEBOOTSTRAP_PATH=/pool/main/c/cdebootstrap
+		[ $DISTRO = "wheezy" ] && DEBOOTSTRAP_DEB=cdebootstrap-static_0.5.9_armel.deb
+		DEBOOTSTRAP_OPT="--flavour=minimal --allow-unauthenticated"
+		DPKG_DEBOOTSTRAP_OPT="--force-architecture --force-depends"
+		DEB_ADD="$DEB_ADD netbase ifupdown net-tools isc-dhcp-client wget udev apt-utils cron iptables logrotate"
+		DEB_DEL="$DEB_DEL cdebootstrap-helper-rc.d"
+	fi
+
+	if [ $DISTRO = "squeeze" ]; then
+		DEB_INCLUDE=${DEB_INCLUDE},uboot-mkimage,uboot-envtools
+	elif [ $DISTRO = "wheezy" ]; then
+		DEB_INCLUDE=${DEB_INCLUDE},u-boot-tools
+		DEB_EXCLUDE=aptitude-common
+		[ $BUFFALO_KERNEL -eq 0 ] && DEB_BPO="initramfs-tools linux-image-kirkwood"
+		#DEB_BPO="initramfs-tools linux-image-3.16-0.bpo.3-kirkwood"
+		#APT_OPT="-o Acquire::Check-Valid-Until=false"
+	elif [ $DISTRO = "jessie" ]; then
+		DEB_ADD="$DEB_ADD u-boot-tools"
+		if [ $SYSTEMD -eq 0 ]; then
+			DEB_ADD="$DEB_ADD sysvinit-core"
+			DEB_DEL="$DEB_DEL systemd-sysv systemd"
+		fi
+	fi
+
 	SWAP_DEV=/dev/null
 	BOOT_DEV=/dev/md0
 	[ $ARRAY -eq 0 ] && BOOT_DEV=/dev/sda1
@@ -156,17 +207,16 @@ CreateInitrd() {
 	mkdir INITRD
 	mount -o loop initrd INITRD
 	mkdir -p INITRD/{bin,lib,sbin,proc}
-	echo cp -aL /bin/busybox INITRD/bin/; cp -aL /bin/busybox INITRD/bin/
-	echo cp -aL /sbin/pivot_root INITRD/sbin/; cp -aL /sbin/pivot_root INITRD/sbin/
+	echo cp -aL --parents /bin/busybox /sbin/pivot_root INITRD/; cp -aL --parents /bin/busybox /sbin/pivot_root INITRD/
 	if [ $MDROOT -ne 0 ]; then
 		mkdir -p INITRD/{dev,etc/mdadm}
 		(cd INITRD/dev/; echo "MAKEDEV sd{a,b,c,d} md"; MAKEDEV sd{a,b,c,d} md)
 		#echo cp -a /dev/sd{a,b,c,d}* /dev/md* INITRD/dev/; cp -a /dev/sd{a,b,c,d}* /dev/md* INITRD/dev/
 		rm -rf INITRD/dev/md/
-		echo cp -aL /sbin/mdadm INITRD/sbin/; cp -aL /sbin/mdadm INITRD/sbin/
+		echo cp -aL --parents /sbin/mdadm INITRD/; cp -aL --parents /sbin/mdadm INITRD/
 	fi
 	libs2install=$( ldd INITRD/*bin/* | grep -v "^INITRD/" | sed -e 's/.*=> *//'  -e 's/ *(.*//' | sort -u )
-	echo cp -aL $libs2install INITRD/lib/; cp -aL $libs2install INITRD/lib/
+	echo cp -aL --parents $libs2install INITRD/; cp -aL --parents $libs2install INITRD/
 	(cd INITRD/bin; ln -s busybox sh)
 	if [ $MDROOT -eq 0 ]; then
 		cat << EOT > INITRD/linuxrc
@@ -220,7 +270,6 @@ mdadm -As --force
 			echo 1 > enabled
 			cd /
 			umount /sys/kernel/config
-
 echo $ROOTDEV_ID > /proc/sys/kernel/real-root-dev
 umount /proc
 EOT

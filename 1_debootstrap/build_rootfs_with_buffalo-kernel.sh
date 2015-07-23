@@ -54,12 +54,11 @@ rsync -a /lib/modules/`uname -r` $TARGET/lib/modules/
 else
 	ln -s $SRC_ROOT /tmp
 fi
+[ $BUFFALO_KERNEL -eq 1 ] && DEB_INCLUDE=${DEB_INCLUDE},makedev,busybox
 if [ $DISTRO = "jessie" ]; then
 	# dirty hack for Jessie. because there's no xz uncompression support on linkstation, but Jessie's deb is packed by xz
-	arch=$(dpkg --print-architecture)
-	[ "x$arch" = "xarm" ] && arch="armel"
 	mkdir /tmp/cdebootstrap; cd $_
-	tar xfz $SCRIPT_ROOT/lib/cdebootstrap*_${arch}.tar.gz
+	tar xfz $SCRIPT_ROOT/lib/cdebootstrap*_${DEB_ARCH}.tar.gz
 	DEBOOTSTRAP=./cdebootstrap
 else
 	wget -nv -O /tmp/$DEBOOTSTRAP_DEB $MIRROR$DEBOOTSTRAP_PATH/$DEBOOTSTRAP_DEB
@@ -67,12 +66,12 @@ else
 	rm /tmp/$DEBOOTSTRAP_DEB
 fi
 
-echo $DEBOOTSTRAP --arch=armel $DEBOOTSTRAP_OPT --exclude=$DEB_EXCLUDE --include=$DEB_INCLUDE $DISTRO $TARGET $MIRROR
-$DEBOOTSTRAP --arch=armel $DEBOOTSTRAP_OPT --exclude=$DEB_EXCLUDE --include=$DEB_INCLUDE $DISTRO $TARGET $MIRROR
+echo $DEBOOTSTRAP --arch=$DEB_ARCH $DEBOOTSTRAP_OPT --exclude=$DEB_EXCLUDE --include=$DEB_INCLUDE $DISTRO $TARGET $MIRROR
+$DEBOOTSTRAP --arch=$DEB_ARCH $DEBOOTSTRAP_OPT --exclude=$DEB_EXCLUDE --include=$DEB_INCLUDE $DISTRO $TARGET $MIRROR
 RET=$?
 if [ $DISTRO = "jessie" ]; then
-	rm -rf /tmp/cdebootstrap
 	cd -
+	rm -rf /tmp/cdebootstrap
 else
 	dpkg -r $DEBOOTSTRAP
 fi
@@ -90,9 +89,8 @@ auto lo
 iface lo inet loopback
 auto eth0
 iface eth0 inet dhcp
-#auto eth1
-#iface eth1 inet dhcp
 EOT
+[ $BUFFALO_KERNEL -eq 1 ] && echo -e auto eth1\\niface eth1 inet dhcp >> $TARGET/etc/network/interfaces
 if [ -n "$MACHINE_ID" ]; then
 	mkdir -p $TARGET/etc/flash-kernel/
 	cd $_;
@@ -151,9 +149,9 @@ sed -i 's/^#FSCKFIX=no/&\nFSCKFIX=yes/' /etc/default/rcS
 echo 'Acquire::CompressionTypes::Order { "gz"; "bzip2"; "lzma"; };' >> /etc/apt/apt.conf.d/80-roger.conf
 apt-get $APT_OPT update
 [ $ARRAY -eq 1 ] && DEB_ADD="$DEB_ADD mdadm"
-[ $(GetFS $TARGET_DEV) = "xfs" ] && DEB_ADD="$DEB_ADD xfsprogs"
-[ $(GetFS $TARGET_DEV) = "jfs" ] && DEB_ADD="$DEB_ADD jfsutils"
-if [ $(GetFS $TARGET_DEV) = "btrfs" ]; then
+[ "$(GetFS $TARGET_DEV)" = "xfs" ] && DEB_ADD="$DEB_ADD xfsprogs"
+[ "$(GetFS $TARGET_DEV)" = "jfs" ] && DEB_ADD="$DEB_ADD jfsutils"
+if [ "$(GetFS $TARGET_DEV)" = "btrfs" ]; then
 	[ $DISTRO = "wheezy" ] && DEB_BPO="${DEB_BPO} btrfs-tools"
 	[ $DISTRO = "jessie" ] && DEB_ADD="${DEB_ADD} btrfs-tools"
 fi
@@ -182,16 +180,18 @@ if [ -f /etc/inittab ]; then
 fi
 echo 'blacklist ipv6' > /etc/modprobe.d/blacklist_local.conf
 echo 'ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="deadline"' > /etc/udev/rules.d/80-local.rules
-cp -a /usr/share/initramfs-tools/init /usr/share/initramfs-tools/init.orig
-sed -i 's:exec >/run/initramfs/initramfs.debug 2>&1:exec >/dev/kmsg 2>\&1\t# &:' /usr/share/initramfs-tools/init
-sed -i 's:for x in \$(cat /proc/cmdline):& Debug:' /usr/share/initramfs-tools/init
-sed -i 's/^MODULES=most/MODULES=list/' /etc/initramfs-tools/initramfs.conf
-sed -i 's/^BUSYBOX=y/BUSYBOX=n/' /etc/initramfs-tools/initramfs.conf
+if [ $BUFFALO_KERNEL -eq 0 ]; then
+	cp -a /usr/share/initramfs-tools/init /usr/share/initramfs-tools/init.orig
+	sed -i 's:exec >/run/initramfs/initramfs.debug 2>&1:exec >/dev/kmsg 2>\&1\t# &:' /usr/share/initramfs-tools/init
+	sed -i 's:for x in \$(cat /proc/cmdline):& Debug:' /usr/share/initramfs-tools/init
+	sed -i 's/^MODULES=most/MODULES=list/' /etc/initramfs-tools/initramfs.conf
+	sed -i 's/^BUSYBOX=y/BUSYBOX=n/' /etc/initramfs-tools/initramfs.conf
+	CreateInitramfsModule "" $TARGET_DEV $ARRAY
+	CreateInitramfsHook $SCRIPT_ROOT "" $TARGET_DEV $RUN_ROOT $noUUID
+fi
 
 mkdir -p /root/bin
 cp -a $SCRIPT_ROOT/scripts/*.sh /root/bin
-CreateInitramfsModule "" $TARGET_DEV $ARRAY
-CreateInitramfsHook $SCRIPT_ROOT "" $TARGET_DEV $RUN_ROOT $noUUID
 apt-get dist-upgrade -y
 [ -n "$DEB_DEL" ] && apt-get purge -y $DEB_DEL
 apt-get clean
@@ -211,6 +211,11 @@ if [ $BUFFALO_KERNEL -eq 0 ]; then
 else
 	#CreateInitrd $INITRD_ROOT_DEV /boot/initrd.buffalo_debian_$(echo $INITRD_ROOT_DEV |cut -dx -f2) 1
 	CreateInitrd $TARGET_DEV /boot/initrd.buffalo_debian_$(basename $TARGET_DEV) 1
+	if [ ! -h /boot/uImage.buffalo ]; then
+		(cd /boot/;
+		echo ln -s uImage.buffalo_orig uImage.buffalo;
+		ln -s uImage.buffalo_orig uImage.buffalo)
+	fi
 fi
 ls -l /boot/uImage.buffalo /boot/initrd.buffalo
 

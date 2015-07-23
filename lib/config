@@ -1,39 +1,48 @@
+# default settings
 DEBOOTSTRAP=cdebootstrap-static
 ROOTPW=password
 DISTRO=jessie
 NEWHOST=LS-Jessie
 MIRROR=http://http.debian.net/debian
+FORCE_BUFFALO_KERNEL=0
+SYSTEMD=0
 
-# package detail can be found on: https://packages.debian.org/squeeze/all/debootstrap/download
-if [ "x$DEBOOTSTRAP" = "xdebootstrap" ]; then
-	DEBOOTSTRAP_PATH=/pool/main/d/debootstrap
-	[ $DISTRO = "squeeze" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.26+squeeze1_all.deb
-	[ $DISTRO = "wheezy" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.48+deb7u2_all.deb
-	[ $DISTRO = "jessie" ] && DEBOOTSTRAP_DEB="debootstrap_1.0.64~bpo70+1_all.deb"
-	DEBOOTSTRAP_OPT=
-	DPKG_DEBOOTSTRAP_OPT=
-else
-	DEBOOTSTRAP_PATH=/pool/main/c/cdebootstrap
-	[ $DISTRO = "wheezy" ] && DEBOOTSTRAP_DEB=cdebootstrap-static_0.5.9_armel.deb
-	DEBOOTSTRAP_OPT="--flavour=minimal --allow-unauthenticated"
-	DPKG_DEBOOTSTRAP_OPT="--force-architecture --force-depends"
-	DEB_ADD="netbase ifupdown net-tools isc-dhcp-client wget udev apt-utils cron iptables logrotate"
-	DEB_DEL="cdebootstrap-helper-rc.d"
-fi
+# local settings to override defaults
+#DEBOOTSTRAP=debootstrap
+#ROOTPW=password
+#DISTRO=wheezy
+#NEWHOST=LS-Wheezy
+#MIRROR=http://ftp.uk.debian.org/debian
+#FORCE_BUFFALO_KERNEL=1
+#SYSTEMD=1
 
-if [ $DISTRO = "squeeze" ]; then
-	DEB_INCLUDE=${DEB_INCLUDE},uboot-mkimage,uboot-envtools
-elif [ $DISTRO = "wheezy" ]; then
-	DEB_INCLUDE=${DEB_INCLUDE},u-boot-tools
-	DEB_EXCLUDE=aptitude-common
-	DEB_BPO="initramfs-tools linux-image-kirkwood"
-	#DEB_BPO="initramfs-tools linux-image-3.16-0.bpo.3-kirkwood"
-	#APT_OPT="-o Acquire::Check-Valid-Until=false"
-elif [ $DISTRO = "jessie" ]; then
-	DEB_ADD="$DEB_ADD u-boot-tools sysvinit-core"
-	DEB_DEL="$DEB_DEL systemd-sysv systemd"
-fi
 
-DEB_EXCLUDE=${DEB_EXCLUDE},aptitude,tasksel,tasksel-data,vim-tiny
-DEB_INCLUDE=${DEB_INCLUDE},whiptail
-DEB_ADD="$DEB_ADD ssh vim-nox locales screen less hddtemp smartmontools rsync file mtr-tiny rsyslog ntpdate"
+# ====================================================
+# these settings below are now detected by script.
+# no need to set here, just for reference
+# ====================================================
+
+# ==== settings for RAID modes, such as LS-WXL/WVL
+#TARGET=/mnt/array1/rootfs
+#TARGET_DEV=/dev/md2
+#BOOT_DEV=/dev/md0
+#MNT_DEV=/dev/md1
+#SWAP_DEV=/dev/null
+
+# ==== settings for non-RAID modes, such as LS-VL
+#TARGET=/mnt/disk1/rootfs
+#TARGET_DEV=/dev/sda6
+#BOOT_DEV=/dev/sda1
+#MNT_DEV=/dev/sda2
+#SWAP_DEV=/dev/null
+
+# ==== settings for bootstrap on USB connected HDD/SSD
+#TARGET=/mnt/rootfs
+#TARGET_DEV=/dev/sdb6
+#BOOT_DEV=/dev/sdb1
+#MNT_DEV=/dev/sdb2
+#SWAP_DEV=/dev/null
+
+# root device when booting. default is same as xxx_DEV
+#RUN_ROOT=/dev/sda6
+#RUN_BOOT=/dev/sda1
