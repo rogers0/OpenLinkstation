@@ -19,7 +19,6 @@ SRC_ROOT=$(readlink -f $(dirname $0)/..)
 [ "x$1" = "xdebian" ] && STAGE=2
 
 . $SRC_ROOT/lib/config
-. $SRC_ROOT/lib/config_local
 . $SRC_ROOT/lib/shell_lib
 
 if [ $STAGE -eq 0 ]; then
