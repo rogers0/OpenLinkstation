@@ -249,6 +249,7 @@ echo tar $ARG $TAR
 tar $ARG $TAR)
 
 CreateFstab $noUUID
+mount -o remount,rw /boot
 if [ $BUFFALO_KERNEL -eq 0 ]; then
 	ChrootPrepare $TARGET $BOOT_DEV
 	chroot $TARGET df -h
@@ -259,7 +260,6 @@ if [ $BUFFALO_KERNEL -eq 0 ]; then
 	chroot $TARGET update-initramfs -utk all
 	ChrootEnd $TARGET
 else
-	mount -o remount,rw /boot
 	initrd_bak=initrd.buffalo_debian_tmp-`basename $MNT_DEV`
 	(cd /boot; [ -f $initrd_bak ] && rm $initrd_bak;
 	[ -f initrd.buffalo_debian ] && mv initrd.buffalo_debian $initrd_bak)

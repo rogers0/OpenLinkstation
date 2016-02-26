@@ -13,7 +13,7 @@ SYSTEMD=0
 #DISTRO=wheezy
 #NEWHOST=LS-Wheezy
 #MIRROR=http://ftp.uk.debian.org/debian
-#FORCE_BUFFALO_KERNEL=1
+#FORCE_BUFFALO_KERNEL=1		# buffalo kernel is broken with Jessie's udev, so please choose wheezy when enable this
 #SYSTEMD=1
 
 
