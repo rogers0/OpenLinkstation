@@ -93,7 +93,7 @@ EOT
 if [ -n "$MACHINE_ID" ]; then
 	mkdir -p $TARGET/etc/flash-kernel/
 	cd $_;
-	cp -a $SCRIPT_ROOT/dtb .
+	cp -a $SCRIPT_ROOT/dtb dtbs
 	cp -a $SCRIPT_ROOT/flash-kernel/db.linkstation .
 	ln -sf db.linkstation db
 	echo $MACHINE_ID > machine
@@ -162,7 +162,7 @@ fi
 [ -n "$DEB_ADD" ] && apt-get install -y --no-install-recommends $DEB_ADD
 if [ -n "$MACHINE_ID" ]; then
 	kernel=$(dpkg -l |grep linux-image|head -n1|cut -d" " -f3)
-	[ -n "$kernel" -a -d /usr/lib/$kernel ] && ln -sf /etc/flash-kernel/dtb/*.dtb /usr/lib/$kernel/
+	[ -n "$kernel" -a -d /usr/lib/$kernel ] && ln -sf /etc/flash-kernel/dtbs/*.dtb /usr/lib/$kernel/
 	rm -f /etc/flash-kernel/kernel-image
 fi
 rm -f /target_dev

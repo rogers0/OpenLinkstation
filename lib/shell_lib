@@ -7,12 +7,8 @@ InitVal() {
 	if [ $STAGE -eq 0 -a -e /proc/buffalo/firmware ]; then
 		MACHINE_ID=$(grep PRODUCTNAME /proc/buffalo/firmware|cut -d= -f2|cut -d\( -f1)
 		case "$MACHINE_ID" in
-		"LS-WXL" | "LS-WSXL")
-			MACHINE_ID="Buffalo Linkstation LS-WXL/WSXL"
-			DEB_KERNEL="linux-image-kirkwood"
-			;;
-		"LS-WVL" | "LS-VL")
-			MACHINE_ID="Buffalo Linkstation LS-WVL/VL"
+		"LS-VL" | "LS-QVL" | "LS-WSXL" | "LS-WVL" | "LS-WXL")
+			MACHINE_ID="Buffalo Linkstation ${MACHINE_ID}"
 			DEB_KERNEL="linux-image-kirkwood"
 			;;
 		"LS410D" | "LS420D" | "LS410DX" | "LS421D" | "LS210D" | "LS220D" | "LS220DB")
@@ -53,7 +49,6 @@ InitVal() {
 	# package detail can be found on: https://packages.debian.org/squeeze/all/debootstrap/download
 	if [ "x$DEBOOTSTRAP" = "xdebootstrap" ]; then
 		DEBOOTSTRAP_PATH=/pool/main/d/debootstrap
-		[ $DISTRO = "squeeze" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.26+squeeze1_all.deb
 		[ $DISTRO = "wheezy" ] && DEBOOTSTRAP_DEB=debootstrap_1.0.48+deb7u2_all.deb
 		[ $DISTRO = "jessie" ] && DEBOOTSTRAP_DEB="debootstrap_1.0.64~bpo70+1_all.deb"
 		DEBOOTSTRAP_OPT=
@@ -67,9 +62,7 @@ InitVal() {
 		DEB_DEL="$DEB_DEL cdebootstrap-helper-rc.d"
 	fi
 
-	if [ $DISTRO = "squeeze" ]; then
-		DEB_INCLUDE=${DEB_INCLUDE},uboot-mkimage,uboot-envtools
-	elif [ $DISTRO = "wheezy" ]; then
+	if [ $DISTRO = "wheezy" ]; then
 		DEB_INCLUDE=${DEB_INCLUDE},u-boot-tools
 		DEB_EXCLUDE=aptitude-common
 		[ $BUFFALO_KERNEL -eq 0 ] && DEB_BPO="initramfs-tools linux-image-kirkwood"

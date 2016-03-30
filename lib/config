@@ -3,7 +3,7 @@ DEBOOTSTRAP=cdebootstrap-static
 ROOTPW=password
 DISTRO=jessie
 NEWHOST=LS-Jessie
-MIRROR=http://http.debian.net/debian
+MIRROR=http://httpredir.debian.net/debian
 FORCE_BUFFALO_KERNEL=0
 SYSTEMD=0
 

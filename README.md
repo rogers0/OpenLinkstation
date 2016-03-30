@@ -20,7 +20,6 @@ There's no official release yet, so you need to use daily images. Find images fo
     https://d-i.debian.org/daily-images/armel/daily/orion5x/network-console/buffalo/
     https://d-i.debian.org/daily-images/armel/daily/kirkwood/network-console/buffalo/
 
-LS-WSXL can use the same image as LS-WXL. Likewise, LS-VL can use the same image as LS-WVL.
 Put those images into 1st partition of the HDD (/dev/sda1 or /dev/md0), and boot Linkstation, after a few minutes you can access to the d-i via SSH connection:
 
     ssh installer@<IP address>
@@ -68,10 +67,11 @@ Status
 
 Confirmed to be working on the model/firmware below:
 
+ - LS-QVL 1.71 (Debian 3.16-ckt Wheezy-backport / Jessie kernel + own DTB)
  - LS-VL 1.68 ~ 1.71 (Debian 3.16-ckt Wheezy-backport / Jessie kernel + own DTB)
- - LS-WXL 1.68 ~ 1.71 (Debian 3.16-ckt Wheezy-backport / Jessie kernel + own DTB)
  - LS-WSXL 1.68 ~ 1.71 (Debian 3.16-ckt Wheezy-backport / Jessie kernel + own DTB)
  - LS-WVL 1.68 ~ 1.71 (Debian 3.16-ckt Wheezy-backport / Jessie kernel + own DTB)
+ - LS-WXL 1.68 ~ 1.71 (Debian 3.16-ckt Wheezy-backport / Jessie kernel + own DTB)
  - LS-420 1.80 ~ 1.81 (Debian Jessie root fs + Buffalo kernel) (upgrade to Jessie is OK, but direct bootstrap to Jessie still has issue)
 
 
