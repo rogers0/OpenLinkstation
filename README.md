@@ -25,7 +25,14 @@ Put those images into 1st partition of the HDD (/dev/sda1 or /dev/md0), and boot
     ssh installer@<IP address>
 
 the password should be "install".
-Then follow the instruction, you can natively install a clean Debian system.
+
+If you want to use RAID-1 for 1st partition, you need to set up it as metadata 0.90, which cannot be done in UI. So you need another SSH session to log into shell, and wait the timing after d-i probing disks but before entering partman, type
+
+    mdadm --create /dev/md0 --level=1 --raid-devices=2 -e 0 /dev/sda1 /dev/sdb1
+    -- or the following if you have only 1 HDD currently --
+    mdadm --create /dev/md0 --level=1 --raid-devices=2 -e 0 /dev/sda1 missing
+
+For other part, just follow the instruction, you can natively install a clean Debian system.
 
 ----
 Purpose
